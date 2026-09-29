@@ -5,6 +5,14 @@ export const RESUME_BUCKET = 'resumes';
 
 let client: SupabaseClient | undefined;
 
+export function isSupabaseConfigured(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
+}
+
 /** Server-side Supabase client using the secret (service-role) key. Never import this in client code. */
 export function supabaseAdmin(): SupabaseClient {
   if (client) return client;
