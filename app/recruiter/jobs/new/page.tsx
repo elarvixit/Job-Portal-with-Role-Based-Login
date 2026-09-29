@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
-import { readDb } from '@/lib/db';
+import { listJobsByRecruiter } from '@/lib/repo';
 import JobForm from '@/components/JobForm';
 import { ArrowLeft } from '@/components/icons';
 
@@ -9,8 +9,7 @@ export const metadata: Metadata = { title: 'Post a Job' };
 
 export default async function NewJobPage() {
   const user = await requireRole('recruiter');
-  const db = await readDb();
-  const last = db.jobs.filter((j) => j.recruiterId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const [last] = await listJobsByRecruiter(user.id);
 
   return (
     <div className="container">

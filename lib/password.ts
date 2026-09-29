@@ -1,4 +1,3 @@
-import 'server-only';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 export function hashPassword(password: string): string {

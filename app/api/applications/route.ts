@@ -1,75 +1,67 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
-import { mutate, newId, readDb, saveUpload } from '@/lib/db';
-import type { Application } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
+import { getCurrentUser } from '@/lib/auth';
+import * as repo from '@/lib/repo';
 
 export const runtime = 'nodejs';
 
 const MAX_BYTES = 5 * 1024 * 1024;
+const ID_RE = /^app_[a-f0-9]{12}$/;
 
 function fail(status: number, error: string) {
   return NextResponse.json({ ok: false, error }, { status });
 }
 
+// Step 2 of applying: the resume is already in Storage; verify it and record the application.
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return fail(401, 'Please log in to apply.');
   if (user.role !== 'candidate') return fail(403, 'Recruiters cannot apply to jobs.');
 
-  let form: FormData;
-  try {
-    form = await req.formData();
-  } catch {
-    return fail(400, 'Could not read the submitted form.');
-  }
+  const body = (await req.json().catch(() => ({}))) as {
+    jobId?: string;
+    applicationId?: string;
+    coverNote?: string;
+    resumeName?: string;
+  };
+  const jobId = String(body.jobId ?? '');
+  const applicationId = String(body.applicationId ?? '');
+  const coverNote = String(body.coverNote ?? '').trim();
+  const resumeName = String(body.resumeName ?? 'resume.pdf').slice(0, 120) || 'resume.pdf';
 
-  const jobId = String(form.get('jobId') ?? '');
-  const coverNote = String(form.get('coverNote') ?? '').trim();
-  const resume = form.get('resume');
+  if (!ID_RE.test(applicationId)) return fail(400, 'Invalid upload. Please try again.');
+  // The path is derived server-side, so a candidate can only ever attach a file from their own folder.
+  const path = `${user.id}/${applicationId}.pdf`;
 
-  const db = await readDb();
-  const job = db.jobs.find((j) => j.id === jobId);
-  if (!job) return fail(404, 'This job no longer exists.');
-  if (job.status !== 'open') return fail(400, 'This job is no longer accepting applications.');
-  if (db.applications.some((a) => a.jobId === jobId && a.candidateId === user.id)) {
-    return fail(409, 'You have already applied to this job.');
-  }
+  const reject = async (status: number, error: string) => {
+    await repo.removeResume(path);
+    return fail(status, error);
+  };
 
-  if (coverNote.length < 20) return fail(400, 'Please write a cover note of at least 20 characters.');
-  if (coverNote.length > 2000) return fail(400, 'Cover note must be 2,000 characters or fewer.');
+  const job = await repo.getJob(jobId);
+  if (!job) return reject(404, 'This job no longer exists.');
+  if (job.status !== 'open') return reject(400, 'This job is no longer accepting applications.');
+  if (coverNote.length < 20) return reject(400, 'Please write a cover note of at least 20 characters.');
+  if (coverNote.length > 2000) return reject(400, 'Cover note must be 2,000 characters or fewer.');
 
-  if (!(resume instanceof File) || resume.size === 0) return fail(400, 'Please attach your resume as a PDF.');
-  if (resume.size > MAX_BYTES) return fail(400, 'Resume must be 5 MB or smaller.');
-  const looksPdf = resume.type === 'application/pdf' || resume.name.toLowerCase().endsWith('.pdf');
-  if (!looksPdf) return fail(400, 'Only PDF files are accepted.');
+  const file = await repo.downloadResume(path);
+  if (!file) return fail(400, 'Your resume did not finish uploading. Please try again.');
+  if (file.length > MAX_BYTES) return reject(400, 'Resume must be 5 MB or smaller.');
+  if (file.subarray(0, 5).toString('latin1') !== '%PDF-') return reject(400, 'That file is not a valid PDF.');
 
-  const bytes = Buffer.from(await resume.arrayBuffer());
-  if (bytes.subarray(0, 5).toString('latin1') !== '%PDF-') return fail(400, 'That file is not a valid PDF.');
-
-  const id = newId('app');
-  const fileName = `${id}.pdf`;
-  await saveUpload(fileName, bytes);
-
-  const now = new Date().toISOString();
-  const created = await mutate((d) => {
-    if (d.applications.some((a) => a.jobId === jobId && a.candidateId === user.id)) return null;
-    const application: Application = {
-      id,
-      jobId,
-      candidateId: user.id,
-      coverNote,
-      resumeFile: fileName,
-      resumeName: resume.name.slice(0, 120),
-      status: 'applied',
-      createdAt: now,
-      updatedAt: now,
-    };
-    d.applications.push(application);
-    return application;
+  const outcome = await repo.createApplication({
+    id: applicationId,
+    jobId: job.id,
+    candidateId: user.id,
+    coverNote,
+    resumePath: path,
+    resumeName,
+    status: 'applied',
+    createdAt: '',
+    updatedAt: '',
   });
-  if (!created) return fail(409, 'You have already applied to this job.');
+  if (outcome === 'duplicate') return reject(409, 'You have already applied to this job.');
 
   revalidatePath('/', 'layout');
-  return NextResponse.json({ ok: true, id: created.id });
+  return NextResponse.json({ ok: true, id: applicationId });
 }

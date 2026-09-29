@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
-import { readDb } from '@/lib/db';
+import { listApplicationsByCandidate, listOpenJobs } from '@/lib/repo';
+import type { Job } from '@/lib/types';
 import ApplicationsTable, { type Row } from '@/components/ApplicationsTable';
 import { EmptyState, JobCard } from '@/components/ui';
 import { ArrowRight, ClockIcon, CompassIcon, InboxIcon, StarIcon } from '@/components/icons';
@@ -10,23 +11,12 @@ export const metadata: Metadata = { title: 'Dashboard' };
 
 export default async function CandidateDashboard() {
   const user = await requireRole('candidate');
-  const db = await readDb();
-
-  const rows: Row[] = db.applications
-    .filter((a) => a.candidateId === user.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .flatMap((app) => {
-      const job = db.jobs.find((j) => j.id === app.jobId);
-      return job ? [{ app, job }] : [];
-    });
+  const [rows, openJobs]: [Row[], Job[]] = await Promise.all([listApplicationsByCandidate(user.id), listOpenJobs()]);
 
   const inReview = rows.filter((r) => r.app.status === 'reviewing').length;
   const shortlisted = rows.filter((r) => r.app.status === 'shortlisted' || r.app.status === 'hired').length;
   const appliedIds = new Set(rows.map((r) => r.job.id));
-  const suggestions = db.jobs
-    .filter((j) => j.status === 'open' && !appliedIds.has(j.id))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 3);
+  const suggestions = openJobs.filter((j) => !appliedIds.has(j.id)).slice(0, 3);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';

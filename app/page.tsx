@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { readDb } from '@/lib/db';
+import { listOpenJobs } from '@/lib/repo';
 import { JOB_TYPES } from '@/lib/types';
 import { EmptyState, JobCard } from '@/components/ui';
 import { BriefcaseIcon, PinIcon, SearchIcon } from '@/components/icons';
@@ -20,8 +20,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const location = sp.location ?? '';
   const type = sp.type ?? '';
 
-  const db = await readDb();
-  const openJobs = db.jobs.filter((j) => j.status === 'open');
+  const openJobs = await listOpenJobs();
   const locations = [...new Set(openJobs.map((j) => j.location))].sort((a, b) =>
     a === 'Remote' ? -1 : b === 'Remote' ? 1 : a.localeCompare(b),
   );
@@ -32,9 +31,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       (!needle || [j.title, j.company, j.description].some((f) => f.toLowerCase().includes(needle))) &&
       (!location || j.location === location),
   );
-  const jobs = matchesQL
-    .filter((j) => !type || j.type === type)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const jobs = matchesQL.filter((j) => !type || j.type === type);
 
   const companies = new Set(openJobs.map((j) => j.company)).size;
   const hasFilters = Boolean(q || location || type);

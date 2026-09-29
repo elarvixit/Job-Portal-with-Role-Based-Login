@@ -36,17 +36,11 @@ export interface Application {
   jobId: string;
   candidateId: string;
   coverNote: string;
-  resumeFile: string;
+  resumePath: string;
   resumeName: string;
   status: ApplicationStatus;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface Database {
-  users: User[];
-  jobs: Job[];
-  applications: Application[];
 }
 
 export type PublicUser = Omit<User, 'passwordHash'>;

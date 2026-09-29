@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
-import { readDb } from '@/lib/db';
+import { listApplicationsForJobs, listJobsByRecruiter } from '@/lib/repo';
 import { initials, timeAgo } from '@/lib/format';
 import { EmptyState, StatusBadge } from '@/components/ui';
 import { BriefcaseIcon, EditIcon, InboxIcon, PlusIcon, StarIcon, UsersIcon } from '@/components/icons';
@@ -10,20 +10,18 @@ export const metadata: Metadata = { title: 'Recruiter dashboard' };
 
 export default async function RecruiterDashboard() {
   const user = await requireRole('recruiter');
-  const db = await readDb();
-
-  const myJobs = db.jobs.filter((j) => j.recruiterId === user.id);
-  const jobIds = new Set(myJobs.map((j) => j.id));
-  const apps = db.applications.filter((a) => jobIds.has(a.jobId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const myJobs = await listJobsByRecruiter(user.id);
+  const withCandidates = await listApplicationsForJobs(myJobs.map((j) => j.id));
+  const apps = withCandidates.map((r) => r.app);
 
   const openJobs = myJobs.filter((j) => j.status === 'open').length;
   const shortlisted = apps.filter((a) => a.status === 'shortlisted').length;
   const newThisWeek = apps.filter((a) => Date.now() - new Date(a.createdAt).getTime() < 7 * 86400000).length;
 
-  const recent = apps.slice(0, 6).map((a) => ({
-    app: a,
-    job: myJobs.find((j) => j.id === a.jobId)!,
-    candidate: db.users.find((u) => u.id === a.candidateId),
+  const recent = withCandidates.slice(0, 6).map(({ app, candidate }) => ({
+    app,
+    job: myJobs.find((j) => j.id === app.jobId)!,
+    candidate,
   }));
 
   return (

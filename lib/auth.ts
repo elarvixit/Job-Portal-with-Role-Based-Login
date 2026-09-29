@@ -1,7 +1,8 @@
 import 'server-only';
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { readDb } from './db';
+import { getUserById } from './repo';
 import { SESSION_COOKIE, dashboardFor, verifySession } from './session';
 import type { PublicUser, Role } from './types';
 
@@ -10,15 +11,12 @@ export async function getSession() {
   return verifySession(store.get(SESSION_COOKIE)?.value);
 }
 
-export async function getCurrentUser(): Promise<PublicUser | null> {
+/** The logged-in user, looked up once per request (layout and page share the result). */
+export const getCurrentUser = cache(async (): Promise<PublicUser | null> => {
   const session = await getSession();
   if (!session) return null;
-  const db = await readDb();
-  const user = db.users.find((u) => u.id === session.uid);
-  if (!user) return null;
-  const { passwordHash: _omit, ...pub } = user;
-  return pub;
-}
+  return getUserById(session.uid);
+});
 
 /** Ensures the visitor is logged in with the given role, otherwise redirects. */
 export async function requireRole(role: Role): Promise<PublicUser> {

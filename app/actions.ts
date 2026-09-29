@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { mutate, newId, readDb } from '@/lib/db';
+import * as repo from '@/lib/repo';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { SESSION_COOKIE, SESSION_MAX_AGE, dashboardFor, signSession } from '@/lib/session';
 import { getCurrentUser, requireRole } from '@/lib/auth';
@@ -49,8 +49,7 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   if (!password) fieldErrors.password = 'Enter your password.';
   if (Object.keys(fieldErrors).length) return { fieldErrors, values };
 
-  const db = await readDb();
-  const user = db.users.find((u) => u.email === email);
+  const user = await repo.getUserByEmail(email);
   if (!user || !verifyPassword(password, user.passwordHash)) {
     return { error: 'Incorrect email or password.', values };
   }
@@ -73,17 +72,20 @@ export async function signupAction(_prev: FormState, formData: FormData): Promis
   if (role !== 'candidate' && role !== 'recruiter') fieldErrors.role = 'Choose how you will use Hireloom.';
   if (Object.keys(fieldErrors).length) return { fieldErrors, values };
 
-  const passwordHash = hashPassword(password);
-  const result = await mutate((db) => {
-    if (db.users.some((u) => u.email === email)) return null;
-    const user = { id: newId('usr'), name, email, passwordHash, role, createdAt: new Date().toISOString() };
-    db.users.push(user);
-    return user;
-  });
-  if (!result) return { fieldErrors: { email: 'An account with this email already exists.' }, values };
+  const user = {
+    id: repo.newId('usr'),
+    name,
+    email,
+    passwordHash: hashPassword(password),
+    role,
+    createdAt: new Date().toISOString(),
+  };
+  if ((await repo.createUser(user)) === 'duplicate') {
+    return { fieldErrors: { email: 'An account with this email already exists.' }, values };
+  }
 
-  await startSession(result.id, result.role);
-  redirect(dashboardFor(result.role));
+  await startSession(user.id, user.role);
+  redirect(dashboardFor(user.role));
 }
 
 export async function logoutAction() {
@@ -119,30 +121,15 @@ export async function saveJobAction(_prev: FormState, formData: FormData): Promi
   if (values.status !== 'open' && values.status !== 'closed') fieldErrors.status = 'Choose a status.';
   if (Object.keys(fieldErrors).length) return { fieldErrors, values };
 
-  const now = new Date().toISOString();
-  const outcome = await mutate((db) => {
-    if (id) {
-      const job = db.jobs.find((j) => j.id === id);
-      if (!job) return 'missing' as const;
-      if (job.recruiterId !== recruiter.id) return 'forbidden' as const;
-      Object.assign(job, values, { updatedAt: now });
-      return 'ok' as const;
-    }
-    const job: Job = {
-      id: newId('job'),
-      recruiterId: recruiter.id,
-      ...values,
-      type: values.type as JobType,
-      status: values.status as Job['status'],
-      createdAt: now,
-      updatedAt: now,
-    };
-    db.jobs.push(job);
-    return 'ok' as const;
-  });
+  const input: repo.JobInput = { ...values, type: values.type as JobType, status: values.status as Job['status'] };
 
-  if (outcome === 'forbidden') redirect('/403');
-  if (outcome === 'missing') return { error: 'This job no longer exists.', values };
+  if (id) {
+    const outcome = await repo.updateJob(id, recruiter.id, input);
+    if (outcome === 'forbidden') redirect('/403');
+    if (outcome === 'missing') return { error: 'This job no longer exists.', values };
+  } else {
+    await repo.createJob(recruiter.id, input);
+  }
 
   revalidatePath('/', 'layout');
   redirect(`/recruiter/jobs?saved=${id ? 'updated' : 'created'}`);
@@ -150,15 +137,7 @@ export async function saveJobAction(_prev: FormState, formData: FormData): Promi
 
 export async function toggleJobStatusAction(formData: FormData) {
   const recruiter = await requireRole('recruiter');
-  const id = String(formData.get('id') ?? '');
-  const outcome = await mutate((db) => {
-    const job = db.jobs.find((j) => j.id === id);
-    if (!job) return 'missing';
-    if (job.recruiterId !== recruiter.id) return 'forbidden';
-    job.status = job.status === 'open' ? 'closed' : 'open';
-    job.updatedAt = new Date().toISOString();
-    return 'ok';
-  });
+  const outcome = await repo.toggleJobStatus(String(formData.get('id') ?? ''), recruiter.id);
   if (outcome === 'forbidden') redirect('/403');
   revalidatePath('/', 'layout');
 }
@@ -173,16 +152,7 @@ export async function updateApplicationStatusAction(
   if (!user || user.role !== 'recruiter') return { ok: false, error: 'Not authorized.' };
   if (!APPLICATION_STATUSES.includes(status as ApplicationStatus)) return { ok: false, error: 'Invalid status.' };
 
-  const outcome = await mutate((db) => {
-    const app = db.applications.find((a) => a.id === applicationId);
-    if (!app) return 'missing';
-    const job = db.jobs.find((j) => j.id === app.jobId);
-    if (!job || job.recruiterId !== user.id) return 'forbidden';
-    app.status = status as ApplicationStatus;
-    app.updatedAt = new Date().toISOString();
-    return 'ok';
-  });
-
+  const outcome = await repo.updateApplicationStatus(applicationId, user.id, status as ApplicationStatus);
   if (outcome !== 'ok') return { ok: false, error: outcome === 'missing' ? 'Application not found.' : 'Not authorized.' };
   revalidatePath('/', 'layout');
   return { ok: true };

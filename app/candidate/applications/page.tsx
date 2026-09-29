@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
-import { readDb } from '@/lib/db';
+import { listApplicationsByCandidate } from '@/lib/repo';
 import { APPLICATION_STATUSES, type ApplicationStatus } from '@/lib/types';
 import ApplicationsTable, { type Row } from '@/components/ApplicationsTable';
 import { EmptyState, statusLabel } from '@/components/ui';
@@ -13,15 +13,7 @@ export default async function MyApplicationsPage({ searchParams }: { searchParam
   const user = await requireRole('candidate');
   const { status } = await searchParams;
   const filter = APPLICATION_STATUSES.includes(status as ApplicationStatus) ? (status as ApplicationStatus) : null;
-  const db = await readDb();
-
-  const all: Row[] = db.applications
-    .filter((a) => a.candidateId === user.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .flatMap((app) => {
-      const job = db.jobs.find((j) => j.id === app.jobId);
-      return job ? [{ app, job }] : [];
-    });
+  const all: Row[] = await listApplicationsByCandidate(user.id);
   const rows = filter ? all.filter((r) => r.app.status === filter) : all;
 
   return (

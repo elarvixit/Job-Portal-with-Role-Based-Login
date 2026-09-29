@@ -2,13 +2,23 @@
 
 import { useRef, useState, type DragEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatBytes } from '@/lib/format';
-import FieldError from './FieldError';
+import { formatBytes } from '@/lib/format';import FieldError from './FieldError';
 import { AlertIcon, ArrowRight, UploadIcon, XIcon } from './icons';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MIN_NOTE = 20;
 const MAX_NOTE = 2000;
+
+async function postJson<T extends object = { ok: true }>(url: string, body: unknown): Promise<T | { error: string }> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string } & T;
+  if (!res.ok || !data.ok) return { error: data.error ?? 'Something went wrong. Please try again.' };
+  return data;
+}
 
 function validateFile(file: File): string | null {
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
@@ -69,19 +79,30 @@ export default function ApplyForm({ jobId }: { jobId: string }) {
     }
     if (bad || !file) return;
 
-    const body = new FormData();
-    body.set('jobId', jobId);
-    body.set('coverNote', trimmed);
-    body.set('resume', file);
-
     setSubmitting(true);
     try {
-      const res = await fetch('/api/applications', { method: 'POST', body });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!res.ok || !data.ok) {
-        setServerError(data.error ?? 'Something went wrong. Please try again.');
-        return;
-      }
+      // 1. Ask the server for a one-time upload URL (also checks we're allowed to apply).
+      const start = await postJson<{ applicationId: string; path: string; token: string }>(
+        '/api/applications/upload-url',
+        { jobId },
+      );
+      if ('error' in start) return setServerError(start.error);
+
+      // 2. Upload the PDF straight to private Supabase Storage (client loaded on demand).
+      const { supabaseBrowser } = await import('@/lib/supabase-browser');
+      const { error: uploadError } = await supabaseBrowser()
+        .storage.from('resumes')
+        .uploadToSignedUrl(start.path, start.token, file, { contentType: 'application/pdf' });
+      if (uploadError) return setServerError('Your resume could not be uploaded. Please try again.');
+
+      // 3. Record the application; the server verifies the uploaded file.
+      const done = await postJson('/api/applications', {
+        jobId,
+        applicationId: start.applicationId,
+        coverNote: trimmed,
+        resumeName: file.name,
+      });
+      if ('error' in done) return setServerError(done.error);
       router.refresh();
     } catch {
       setServerError('Network error — check your connection and try again.');

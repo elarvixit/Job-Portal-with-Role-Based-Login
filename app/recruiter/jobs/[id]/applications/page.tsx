@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { requireRole } from '@/lib/auth';
-import { readDb } from '@/lib/db';
+import { getJob, listApplicationsForJobs } from '@/lib/repo';
 import { formatDate, initials, timeAgo } from '@/lib/format';
 import { APPLICATION_STATUSES, type ApplicationStatus } from '@/lib/types';
 import StatusSelect from '@/components/StatusSelect';
@@ -20,16 +20,12 @@ export default async function ApplicantsPage({
 }) {
   const user = await requireRole('recruiter');
   const [{ id }, { status }] = await Promise.all([params, searchParams]);
-  const db = await readDb();
-  const job = db.jobs.find((j) => j.id === id);
+  const job = await getJob(id);
   if (!job) notFound();
   if (job.recruiterId !== user.id) redirect('/403');
 
   const filter = APPLICATION_STATUSES.includes(status as ApplicationStatus) ? (status as ApplicationStatus) : null;
-  const all = db.applications
-    .filter((a) => a.jobId === job.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map((app) => ({ app, candidate: db.users.find((u) => u.id === app.candidateId) }));
+  const all = await listApplicationsForJobs([job.id]);
   const rows = filter ? all.filter((r) => r.app.status === filter) : all;
 
   return (

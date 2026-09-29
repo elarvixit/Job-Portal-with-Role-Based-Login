@@ -1,6 +1,13 @@
-import 'server-only';
+// Demo data, loaded into Supabase by `npm run db:seed` (scripts/seed.ts).
 import { hashPassword } from './password';
-import type { Application, ApplicationStatus, Database, Job, JobType, User } from './types';
+import type { Application, ApplicationStatus, Job, JobType, User } from './types';
+
+export interface SeedData {
+  users: User[];
+  jobs: Job[];
+  applications: Application[];
+  files: { path: string; data: Buffer }[];
+}
 
 // Demo accounts — all use the password "password123" (see README).
 const DEMO_PASSWORD = 'password123';
@@ -35,7 +42,7 @@ function samplePdf(lines: string[]): Buffer {
   return Buffer.from(out, 'latin1');
 }
 
-export function buildSeed(): { db: Database; files: { name: string; data: Buffer }[] } {
+export function buildSeed(): SeedData {
   const pw = hashPassword(DEMO_PASSWORD);
   const user = (id: string, name: string, email: string, role: User['role'], age: number): User => ({
     id,
@@ -232,7 +239,7 @@ export function buildSeed(): { db: Database; files: { name: string; data: Buffer
     jobId,
     candidateId,
     coverNote,
-    resumeFile: `${id}.pdf`,
+    resumePath: `${candidateId}/${id}.pdf`,
     resumeName: `${users.find((u) => u.id === candidateId)!.name.replace(' ', '_')}_Resume.pdf`,
     status,
     createdAt: daysAgo(age),
@@ -252,7 +259,7 @@ export function buildSeed(): { db: Database; files: { name: string; data: Buffer
   const files = applications.map((a) => {
     const u = users.find((x) => x.id === a.candidateId)!;
     return {
-      name: a.resumeFile,
+      path: a.resumePath,
       data: samplePdf([
         u.name,
         u.email,
@@ -270,5 +277,5 @@ export function buildSeed(): { db: Database; files: { name: string; data: Buffer
     };
   });
 
-  return { db: { users, jobs, applications }, files };
+  return { users, jobs, applications, files };
 }

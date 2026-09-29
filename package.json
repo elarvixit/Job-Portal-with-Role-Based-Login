@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "reset": "node -e \"require('fs').rmSync('data',{recursive:true,force:true});console.log('Data reset. Demo data will be re-seeded on next request.')\""
+    "db:seed": "tsx scripts/seed.ts",
+    "db:reset": "tsx scripts/seed.ts --reset"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
     "next": "^15.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -18,6 +20,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.0"
   }
 }

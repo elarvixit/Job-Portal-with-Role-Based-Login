@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { requireRole } from '@/lib/auth';
-import { readDb } from '@/lib/db';
+import { getJob } from '@/lib/repo';
 import JobForm from '@/components/JobForm';
 import { StatusBadge } from '@/components/ui';
 import { ArrowLeft } from '@/components/icons';
@@ -12,8 +12,7 @@ export const metadata: Metadata = { title: 'Edit job' };
 export default async function EditJobPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireRole('recruiter');
   const { id } = await params;
-  const db = await readDb();
-  const job = db.jobs.find((j) => j.id === id);
+  const job = await getJob(id);
   if (!job) notFound();
   if (job.recruiterId !== user.id) redirect('/403');
 

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
-import { readDb } from '@/lib/db';
+import { listApplicationsForJobs, listJobsByRecruiter } from '@/lib/repo';
 import { formatDate } from '@/lib/format';
 import { toggleJobStatusAction } from '@/app/actions';
 import { CompanyLogo, EmptyState, StatusBadge } from '@/components/ui';
@@ -14,13 +14,12 @@ export const metadata: Metadata = { title: 'My Jobs' };
 export default async function MyJobsPage({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const user = await requireRole('recruiter');
   const { saved } = await searchParams;
-  const db = await readDb();
-
-  const jobs = db.jobs
-    .filter((j) => j.recruiterId === user.id)
-    .sort((a, b) => (a.status === b.status ? b.createdAt.localeCompare(a.createdAt) : a.status === 'open' ? -1 : 1));
+  const mine = await listJobsByRecruiter(user.id);
+  // Open jobs first, newest first within each group (the query already sorts by date).
+  const jobs = [...mine.filter((j) => j.status === 'open'), ...mine.filter((j) => j.status === 'closed')];
+  const apps = await listApplicationsForJobs(jobs.map((j) => j.id));
   const counts = new Map<string, { total: number; fresh: number }>();
-  for (const a of db.applications) {
+  for (const { app: a } of apps) {
     const c = counts.get(a.jobId) ?? { total: 0, fresh: 0 };
     c.total++;
     if (a.status === 'applied') c.fresh++;

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { readDb } from '@/lib/db';
+import { countApplicationsForJob, findApplication, getJob } from '@/lib/repo';
 import { getCurrentUser } from '@/lib/auth';
 import { formatDate, timeAgo } from '@/lib/format';
 import ApplyForm from '@/components/ApplyForm';
@@ -12,27 +12,23 @@ type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const db = await readDb();
-  const job = db.jobs.find((j) => j.id === id);
+  const job = await getJob(id);
   return { title: job ? `${job.title} at ${job.company}` : 'Job not found' };
 }
 
 export default async function JobDetailsPage({ params }: Props) {
   const { id } = await params;
-  const [db, user] = await Promise.all([readDb(), getCurrentUser()]);
-  const job = db.jobs.find((j) => j.id === id);
+  const [job, user] = await Promise.all([getJob(id), getCurrentUser()]);
   if (!job) notFound();
 
   const isOwner = user?.role === 'recruiter' && job.recruiterId === user.id;
-  // Closed jobs are only visible to the recruiter who owns them.
-  if (job.status === 'closed' && !isOwner) {
-    const applied = user && db.applications.some((a) => a.jobId === job.id && a.candidateId === user.id);
-    if (!applied) notFound();
-  }
+  const [applicantCount, myApplication] = await Promise.all([
+    countApplicationsForJob(job.id),
+    user?.role === 'candidate' ? findApplication(job.id, user.id) : null,
+  ]);
 
-  const applicantCount = db.applications.filter((a) => a.jobId === job.id).length;
-  const myApplication =
-    user?.role === 'candidate' ? db.applications.find((a) => a.jobId === job.id && a.candidateId === user.id) : undefined;
+  // Closed jobs are only visible to the recruiter who owns them and candidates who applied.
+  if (job.status === 'closed' && !isOwner && !myApplication) notFound();
 
   let panel: React.ReactNode;
   if (!user) {
