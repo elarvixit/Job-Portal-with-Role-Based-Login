@@ -7,7 +7,20 @@ A modern job portal built with **Next.js 15 (App Router)**, **React 19**, **Type
 
 All data (users, jobs, applications) is stored in **Supabase Postgres**, and resumes in a private **Supabase Storage** bucket.
 
-## Setup
+## Quick start (local mode, no setup)
+
+```bash
+npm install
+npm run dev
+```
+
+Open http://localhost:3000. With no Supabase variables set, the app runs in **local mode**: data is saved in
+`data/db.json` and resumes in `data/uploads/` on your computer, and demo data is created automatically. Delete the
+`data/` folder to start over. Local mode is for trying the app on your own machine — it does not work on Vercel.
+
+Once the Supabase variables below are set, the app uses Supabase automatically (restart `npm run dev`).
+
+## Supabase setup
 
 ### 1. Create the Supabase project
 

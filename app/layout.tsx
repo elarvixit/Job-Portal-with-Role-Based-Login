@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
 import { Instrument_Serif, Plus_Jakarta_Sans } from 'next/font/google';
 import Navbar from '@/components/Navbar';
-import SetupRequired from '@/components/SetupRequired';
 import { getCurrentUser } from '@/lib/auth';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { storageMode } from '@/lib/repo';
 import './globals.css';
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta', display: 'swap' });
@@ -21,16 +20,6 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  if (!isSupabaseConfigured()) {
-    return (
-      <html lang="en" className={`${jakarta.variable} ${serif.variable}`}>
-        <body>
-          <SetupRequired />
-        </body>
-      </html>
-    );
-  }
-
   const user = await getCurrentUser();
 
   return (
@@ -41,7 +30,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <footer className="footer">
           <div className="container">
             <span>© {new Date().getFullYear()} Hireloom. Crafted for great hiring.</span>
-            <span>Candidates · Recruiters · Opportunities</span>
+            <span>
+              {storageMode === 'local'
+                ? 'Local mode · data is saved on this computer'
+                : 'Candidates · Recruiters · Opportunities'}
+            </span>
           </div>
         </footer>
       </body>

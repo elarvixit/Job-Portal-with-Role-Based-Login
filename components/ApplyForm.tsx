@@ -82,18 +82,27 @@ export default function ApplyForm({ jobId }: { jobId: string }) {
     setSubmitting(true);
     try {
       // 1. Ask the server for a one-time upload URL (also checks we're allowed to apply).
-      const start = await postJson<{ applicationId: string; path: string; token: string }>(
+      const start = await postJson<{ applicationId: string; path: string; token: string; local: boolean }>(
         '/api/applications/upload-url',
         { jobId },
       );
       if ('error' in start) return setServerError(start.error);
 
-      // 2. Upload the PDF straight to private Supabase Storage (client loaded on demand).
-      const { supabaseBrowser } = await import('@/lib/supabase-browser');
-      const { error: uploadError } = await supabaseBrowser()
-        .storage.from('resumes')
-        .uploadToSignedUrl(start.path, start.token, file, { contentType: 'application/pdf' });
-      if (uploadError) return setServerError('Your resume could not be uploaded. Please try again.');
+      // 2. Upload the PDF: straight to private Supabase Storage, or to this server in local mode.
+      if (start.local) {
+        const res = await fetch(`/api/applications/local-upload?applicationId=${start.applicationId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/pdf' },
+          body: file,
+        });
+        if (!res.ok) return setServerError('Your resume could not be uploaded. Please try again.');
+      } else {
+        const { supabaseBrowser } = await import('@/lib/supabase-browser');
+        const { error: uploadError } = await supabaseBrowser()
+          .storage.from('resumes')
+          .uploadToSignedUrl(start.path, start.token, file, { contentType: 'application/pdf' });
+        if (uploadError) return setServerError('Your resume could not be uploaded. Please try again.');
+      }
 
       // 3. Record the application; the server verifies the uploaded file.
       const done = await postJson('/api/applications', {

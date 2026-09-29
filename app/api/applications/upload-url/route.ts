@@ -25,5 +25,5 @@ export async function POST(req: Request) {
   const path = `${user.id}/${applicationId}.pdf`;
   const { token } = await repo.createResumeUploadUrl(path);
 
-  return NextResponse.json({ ok: true, applicationId, path, token });
+  return NextResponse.json({ ok: true, applicationId, path, token, local: repo.storageMode === 'local' });
 }
