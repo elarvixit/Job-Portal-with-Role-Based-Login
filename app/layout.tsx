@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Instrument_Serif, Plus_Jakarta_Sans } from 'next/font/google';
 import Navbar from '@/components/Navbar';
+import SetupRequired from '@/components/SetupRequired';
 import { getCurrentUser } from '@/lib/auth';
 import { storageMode } from '@/lib/repo';
 import './globals.css';
@@ -20,6 +21,17 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Vercel can't keep local files, so without Supabase show setup steps instead of erroring.
+  if (storageMode === 'local' && process.env.VERCEL) {
+    return (
+      <html lang="en" className={`${jakarta.variable} ${serif.variable}`}>
+        <body>
+          <SetupRequired />
+        </body>
+      </html>
+    );
+  }
+
   const user = await getCurrentUser();
 
   return (
