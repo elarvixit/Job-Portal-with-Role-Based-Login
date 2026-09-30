@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { countApplicationsForJob, findApplication, getJob } from '@/lib/repo';
 import { getCurrentUser } from '@/lib/auth';
@@ -10,22 +11,26 @@ import { ArrowLeft, BriefcaseIcon, BulbIcon, CheckIcon, LockIcon, ShieldIcon, Us
 
 type Props = { params: Promise<{ id: string }> };
 
+// The tab title and the page share one lookup per request.
+const loadJob = cache(getJob);
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const job = await getJob(id);
+  const job = await loadJob(id);
   return { title: job ? `${job.title} at ${job.company}` : 'Job not found' };
 }
 
 export default async function JobDetailsPage({ params }: Props) {
   const { id } = await params;
-  const [job, user] = await Promise.all([getJob(id), getCurrentUser()]);
+  // Everything this page needs, fetched at once (one database round trip instead of three).
+  const [job, applicantCount, [user, myApplication]] = await Promise.all([
+    loadJob(id),
+    countApplicationsForJob(id),
+    getCurrentUser().then(async (u) => [u, u?.role === 'candidate' ? await findApplication(id, u.id) : null] as const),
+  ]);
   if (!job) notFound();
 
   const isOwner = user?.role === 'recruiter' && job.recruiterId === user.id;
-  const [applicantCount, myApplication] = await Promise.all([
-    countApplicationsForJob(job.id),
-    user?.role === 'candidate' ? findApplication(job.id, user.id) : null,
-  ]);
 
   // Closed jobs are only visible to the recruiter who owns them and candidates who applied.
   if (job.status === 'closed' && !isOwner && !myApplication) notFound();

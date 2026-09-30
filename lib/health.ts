@@ -50,18 +50,24 @@ export async function supabaseHealth(): Promise<Health> {
 
   try {
     const db = supabaseAdmin();
-    for (const table of Object.values(TABLES)) {
-      // A GET (not HEAD) so Supabase includes the error details in the response body.
-      const { error } = await db.from(table).select('id').limit(1);
-      if (error) {
-        const p = explain(`Table "${table}"`, error);
-        // A bad key or unreachable project affects every table; one message is enough.
-        if (!p.startsWith('Table')) return settings(p);
-        problems.push(p);
-      }
+    // All four checks at once, so a cold start waits for one round trip instead of four.
+    // A GET (not HEAD) so Supabase includes the error details in the response body.
+    const tables = Object.values(TABLES);
+    const [bucket, ...tableResults] = await Promise.all([
+      db.storage.getBucket(RESUME_BUCKET),
+      ...tables.map((t) => db.from(t).select('id').limit(1)),
+    ]);
+    for (const [i, { error }] of tableResults.entries()) {
+      if (!error) continue;
+      const p = explain(`Table "${tables[i]}"`, error);
+      // A bad key or unreachable project affects every table; one message is enough.
+      if (!p.startsWith('Table')) return settings(p);
+      problems.push(p);
     }
-    const { error: bucketError } = await db.storage.getBucket(RESUME_BUCKET);
-    if (bucketError) problems.push(explain(`Storage bucket "${RESUME_BUCKET}"`, { message: /not found/i.test(bucketError.message) ? 'does not exist' : bucketError.message }));
+    if (bucket.error) {
+      const message = /not found/i.test(bucket.error.message) ? 'does not exist' : bucket.error.message;
+      problems.push(explain(`Storage bucket "${RESUME_BUCKET}"`, { message }));
+    }
   } catch (e) {
     return settings(explain('Supabase', { message: e instanceof Error ? e.message : String(e) }));
   }
