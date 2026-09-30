@@ -8,10 +8,10 @@ import { statusLabel } from './ui';
 
 const TONE: Record<ApplicationStatus, { bg: string; fg: string }> = {
   applied: { bg: 'var(--info-soft)', fg: 'var(--info)' },
-  reviewing: { bg: 'var(--warning-soft)', fg: 'var(--warning)' },
   shortlisted: { bg: 'var(--violet-soft)', fg: 'var(--violet)' },
+  interview: { bg: 'var(--warning-soft)', fg: 'var(--warning)' },
+  offered: { bg: 'var(--success-soft)', fg: 'var(--success)' },
   rejected: { bg: 'var(--danger-soft)', fg: 'var(--danger)' },
-  hired: { bg: 'var(--success-soft)', fg: 'var(--success)' },
 };
 
 export default function StatusSelect({

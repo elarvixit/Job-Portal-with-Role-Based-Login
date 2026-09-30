@@ -1,22 +1,33 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
-import { listApplicationsByCandidate, listOpenJobs } from '@/lib/repo';
-import type { Job } from '@/lib/types';
-import ApplicationsTable, { type Row } from '@/components/ApplicationsTable';
+import { getProfile, listApplicationsByCandidate, listOpenJobs } from '@/lib/repo';
+import { applyBlocker, matchScore, profileChecklist } from '@/lib/rules';
+import ApplicationsTable from '@/components/ApplicationsTable';
 import { CountUp, EmptyState, JobCard, STATUS_HELP, StatusBadge } from '@/components/ui';
-import { ArrowRight, ClockIcon, CompassIcon, InboxIcon, StarIcon } from '@/components/icons';
+import { ArrowRight, CompassIcon, InboxIcon, StarIcon, UserIcon } from '@/components/icons';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 
 export default async function CandidateDashboard() {
   const user = await requireRole('candidate');
-  const [rows, openJobs]: [Row[], Job[]] = await Promise.all([listApplicationsByCandidate(user.id), listOpenJobs()]);
+  const [rows, openJobs, profile] = await Promise.all([
+    listApplicationsByCandidate(user.id),
+    listOpenJobs(),
+    getProfile(user.id),
+  ]);
 
-  const inReview = rows.filter((r) => r.app.status === 'reviewing').length;
-  const shortlisted = rows.filter((r) => r.app.status === 'shortlisted' || r.app.status === 'hired').length;
+  const inProgress = rows.filter((r) => r.app.status === 'shortlisted' || r.app.status === 'interview').length;
+  const offers = rows.filter((r) => r.app.status === 'offered').length;
+  const checklist = profileChecklist(profile);
+
+  // Recommend open jobs you haven't applied to, best skill match first.
   const appliedIds = new Set(rows.map((r) => r.job.id));
-  const suggestions = openJobs.filter((j) => !appliedIds.has(j.id)).slice(0, 3);
+  const suggestions = openJobs
+    .filter((j) => !appliedIds.has(j.id) && !applyBlocker(j))
+    .map((j) => ({ job: j, score: matchScore(j.skills, profile?.skills ?? [])?.percent ?? 0 }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -36,6 +47,25 @@ export default async function CandidateDashboard() {
         </Link>
       </div>
 
+      {!checklist.complete && (
+        <div className="hint" style={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <UserIcon size={17} />
+            <span>
+              <strong>Your profile is {checklist.percent}% complete.</strong> Add{' '}
+              {checklist.items
+                .filter((i) => !i.done)
+                .map((i) => i.label.toLowerCase())
+                .join(', ')}{' '}
+              before you apply.
+            </span>
+          </span>
+          <Link href="/candidate/profile" className="btn btn-primary btn-sm">
+            Complete profile
+          </Link>
+        </div>
+      )}
+
       <div className="stat-grid">
         <div className="stat featured">
           <div className="top">
@@ -51,27 +81,27 @@ export default async function CandidateDashboard() {
         </div>
         <div className="stat">
           <div className="top">
-            <span className="k">In review</span>
-            <span className="ico ico-warning">
-              <ClockIcon size={18} />
-            </span>
-          </div>
-          <div className="v">
-            <CountUp value={inReview} />
-          </div>
-          <div className="foot">Recruiters are looking</div>
-        </div>
-        <div className="stat">
-          <div className="top">
-            <span className="k">Shortlisted</span>
+            <span className="k">Shortlisted or interviewing</span>
             <span className="ico ico-violet">
               <StarIcon size={18} />
             </span>
           </div>
           <div className="v">
-            <CountUp value={shortlisted} />
+            <CountUp value={inProgress} />
           </div>
-          <div className="foot">Nice work — keep going</div>
+          <div className="foot">Recruiters want to know more</div>
+        </div>
+        <div className="stat">
+          <div className="top">
+            <span className="k">Offers</span>
+            <span className="ico ico-success">
+              <StarIcon size={18} />
+            </span>
+          </div>
+          <div className="v">
+            <CountUp value={offers} />
+          </div>
+          <div className="foot">{offers ? 'Congratulations!' : 'Keep going — it’s coming'}</div>
         </div>
       </div>
 
@@ -107,11 +137,11 @@ export default async function CandidateDashboard() {
         <div className="card-head">
           <h2 id="status-guide">What your application status means</h2>
           <span className="muted" style={{ fontSize: 13 }}>
-            Recruiters update this — you’ll see changes here and in My Applications.
+            Recruiters update this, and you get a notification each time.
           </span>
         </div>
         <div className="guide-grid">
-          {(['applied', 'reviewing', 'shortlisted', 'hired', 'rejected'] as const).map((s, i) => (
+          {(['applied', 'shortlisted', 'interview', 'offered', 'rejected'] as const).map((s, i) => (
             <div key={s} className="guide-card">
               <span className="n">{s === 'rejected' ? 'OR' : `STEP ${i + 1}`}</span>
               <strong>
@@ -128,15 +158,15 @@ export default async function CandidateDashboard() {
           <div className="section-head">
             <div>
               <h2 style={{ fontSize: 22 }}>Recommended for you</h2>
-              <p>Fresh openings you haven’t applied to yet.</p>
+              <p>Open jobs that match your skills best, that you haven’t applied to yet.</p>
             </div>
             <Link href="/" className="btn btn-ghost btn-sm">
               See all jobs <ArrowRight size={15} />
             </Link>
           </div>
           <div className="job-grid">
-            {suggestions.map((j, i) => (
-              <JobCard key={j.id} job={j} index={i} />
+            {suggestions.map(({ job }, i) => (
+              <JobCard key={job.id} job={job} index={i} />
             ))}
           </div>
         </section>

@@ -59,7 +59,7 @@ async function main() {
     await emptyBucket();
   }
 
-  const { users, jobs, applications, files } = buildSeed();
+  const { users, jobs, profiles, applications, history, notifications, files } = buildSeed();
 
   check(
     'insert users',
@@ -90,6 +90,8 @@ async function main() {
           location: j.location,
           type: j.type,
           salary: j.salary,
+          skills: j.skills,
+          deadline: j.deadline,
           status: j.status,
           created_at: j.createdAt,
           updated_at: j.updatedAt,
@@ -106,6 +108,24 @@ async function main() {
   }
 
   check(
+    'insert profiles',
+    (
+      await supabase.from(TABLES.candidateProfiles).insert(
+        profiles.map((p) => ({
+          user_id: p.userId,
+          phone: p.phone,
+          skills: p.skills,
+          years_experience: p.yearsExperience,
+          resume_path: p.resumePath,
+          resume_name: p.resumeName,
+          resume_size: p.resumeSize,
+          updated_at: p.updatedAt,
+        })),
+      )
+    ).error,
+  );
+
+  check(
     'insert applications',
     (
       await supabase.from(TABLES.applications).insert(
@@ -117,15 +137,48 @@ async function main() {
           resume_path: a.resumePath,
           resume_name: a.resumeName,
           status: a.status,
-          created_at: a.createdAt,
+          applied_on: a.createdAt,
           updated_at: a.updatedAt,
         })),
       )
     ).error,
   );
 
+  check(
+    'insert status history',
+    (
+      await supabase.from(TABLES.statusHistory).insert(
+        history.map((h) => ({
+          id: h.id,
+          application_id: h.applicationId,
+          from_status: h.fromStatus,
+          to_status: h.toStatus,
+          changed_by: h.changedBy,
+          changed_at: h.changedAt,
+        })),
+      )
+    ).error,
+  );
+
+  check(
+    'insert notifications',
+    (
+      await supabase.from(TABLES.notifications).insert(
+        notifications.map((n) => ({
+          id: n.id,
+          user_id: n.userId,
+          to_email: n.toEmail,
+          subject: n.subject,
+          body: n.body,
+          application_id: n.applicationId,
+          created_at: n.createdAt,
+        })),
+      )
+    ).error,
+  );
+
   console.log(
-    `✓ Seeded ${users.length} users, ${jobs.length} jobs, ${applications.length} applications and ${files.length} resumes.`,
+    `✓ Seeded ${users.length} users, ${jobs.length} jobs, ${profiles.length} profiles, ${applications.length} applications, ${history.length} status changes, ${notifications.length} notifications and ${files.length} resumes.`,
   );
   console.log('  Demo password for every account: password123');
 }

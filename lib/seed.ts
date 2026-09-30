@@ -1,12 +1,16 @@
 // Demo data: loaded by `npm run db:seed` (scripts/seed.ts), written to supabase/seed.sql by
 // `npm run db:seed-sql`, and used to create demo resumes on demand (demoResume).
 import { hashPassword } from './password';
-import type { Application, ApplicationStatus, Job, JobType, User } from './types';
+import { statusEmail } from './rules';
+import type { Application, ApplicationStatus, CandidateProfile, Job, JobType, Notification, StatusChange, User } from './types';
 
 export interface SeedData {
   users: User[];
   jobs: Job[];
+  profiles: CandidateProfile[];
   applications: Application[];
+  history: StatusChange[];
+  notifications: Notification[];
   files: { path: string; data: Buffer }[];
 }
 
@@ -16,6 +20,69 @@ const DEMO_PASSWORD = 'password123';
 function daysAgo(n: number): string {
   return new Date(Date.now() - n * 86400000 - Math.floor(n * 3600000 * 1.7)).toISOString();
 }
+
+/** YYYY-MM-DD, n days from today (negative = in the past). */
+function dateInDays(n: number): string {
+  return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+}
+
+/** Required skills for each demo job. */
+const JOB_SKILLS: Record<string, string[]> = {
+  job_senior_fe: ['React', 'TypeScript', 'Next.js', 'CSS', 'Accessibility'],
+  job_product_designer: ['Figma', 'User Research', 'Prototyping', 'Design Systems'],
+  job_data_intern: ['Python', 'pandas', 'SQL', 'Statistics'],
+  job_backend_go: ['Go', 'PostgreSQL', 'Docker', 'Distributed Systems'],
+  job_devops_contract: ['Terraform', 'Kubernetes', 'AWS', 'CI/CD'],
+  job_content_pt: ['Content Strategy', 'Copywriting', 'SEO', 'Fintech'],
+  job_mobile_rn: ['React Native', 'TypeScript', 'iOS', 'Android'],
+  job_qa_contract: ['Playwright', 'JavaScript', 'CI/CD', 'Testing'],
+};
+
+/** Application deadline for each demo job, in days from today. Content Strategist's has passed. */
+const JOB_DEADLINE_DAYS: Record<string, number> = {
+  job_senior_fe: 21,
+  job_product_designer: 14,
+  job_data_intern: 30,
+  job_backend_go: 18,
+  job_devops_contract: 10,
+  job_content_pt: -2,
+  job_mobile_rn: 25,
+  job_qa_contract: -5,
+};
+
+/** Status each demo application has reached, and the path it took to get there. */
+const APP_PATHS: Record<string, ApplicationStatus[]> = {
+  app_1: ['applied', 'shortlisted', 'interview'],
+  app_2: ['applied', 'shortlisted'],
+  app_3: ['applied'],
+  app_4: ['applied', 'shortlisted'],
+  app_5: ['applied'],
+  app_6: ['applied', 'shortlisted', 'interview'],
+  app_7: ['applied', 'shortlisted', 'rejected'],
+  app_8: ['applied', 'shortlisted', 'interview', 'offered'],
+  app_9: ['applied', 'shortlisted'],
+  app_10: ['applied', 'shortlisted', 'interview'],
+  app_11: ['applied', 'shortlisted'],
+  app_12: ['applied'],
+  app_13: ['applied', 'shortlisted', 'interview'],
+  app_14: ['applied', 'rejected'],
+  app_15: ['applied'],
+  app_16: ['applied'],
+  app_17: ['applied', 'rejected'],
+};
+
+/** Phone, skills and experience of each demo candidate. */
+const CANDIDATE_DETAILS: Record<string, { phone: string; skills: string[]; years: number }> = {
+  usr_candidate1: { phone: '+91 98450 11223', skills: ['React', 'TypeScript', 'Next.js', 'CSS', 'D3', 'Go'], years: 7 },
+  usr_candidate2: { phone: '+234 803 555 0142', skills: ['React', 'React Native', 'TypeScript', 'iOS', 'Jest'], years: 8 },
+  usr_candidate3: { phone: '+351 912 345 678', skills: ['Python', 'pandas', 'SQL', 'Accessibility', 'Copywriting'], years: 1 },
+  usr_candidate4: { phone: '+91 99200 44556', skills: ['Go', 'PostgreSQL', 'Docker', 'Kubernetes', 'Terraform', 'AWS', 'Playwright'], years: 6 },
+  usr_candidate5: { phone: '+91 98110 77889', skills: ['Figma', 'User Research', 'Prototyping', 'Copywriting', 'Content Strategy'], years: 5 },
+  usr_candidate6: { phone: '+44 7700 900123', skills: ['TypeScript', 'React Native', 'Node.js', 'Python', 'Kubernetes', 'CI/CD'], years: 4 },
+};
+
+export const profileResumePath = (userId: string) => `${userId}/profile.pdf`;
+const resumeFileName = (name: string) => `${name.replace(/ /g, '_')}_Resume.pdf`;
 
 /** One line of a generated PDF: [font size, text, bold?]. */
 type PdfLine = [number, string, boolean?];
@@ -101,6 +168,8 @@ function records(): Omit<SeedData, 'files'> {
     location,
     type,
     salary,
+    skills: JOB_SKILLS[id] ?? [],
+    deadline: id in JOB_DEADLINE_DAYS ? dateInDays(JOB_DEADLINE_DAYS[id]) : null,
     status,
     description,
     createdAt: daysAgo(age),
@@ -256,33 +325,85 @@ function records(): Omit<SeedData, 'files'> {
     candidateId,
     coverNote,
     resumePath: `${candidateId}/${id}.pdf`,
-    resumeName: `${users.find((u) => u.id === candidateId)!.name.replace(' ', '_')}_Resume.pdf`,
+    resumeName: resumeFileName(users.find((u) => u.id === candidateId)!.name),
     status,
     createdAt: daysAgo(age),
     updatedAt: daysAgo(age),
   });
 
   const applications: Application[] = [
-    app('app_1', 'job_senior_fe', 'usr_candidate1', 'shortlisted', 1, 'I have led frontend at two SaaS startups and love building data-heavy interfaces. Would be thrilled to help shape your visualization layer.'),
-    app('app_2', 'job_backend_go', 'usr_candidate1', 'reviewing', 2, 'Go has been my primary language for 3 years, most recently on a payments reconciliation service.'),
-    app('app_3', 'job_product_designer', 'usr_candidate1', 'applied', 3, 'Designer with a strong systems background — portfolio linked in my resume.'),
-    app('app_4', 'job_senior_fe', 'usr_candidate2', 'reviewing', 1, 'Seven years of React experience, including a large-scale migration to TypeScript.'),
-    app('app_5', 'job_senior_fe', 'usr_candidate3', 'applied', 0, 'Accessibility advocate and frontend engineer — I would love to chat.'),
-    app('app_6', 'job_data_intern', 'usr_candidate3', 'shortlisted', 5, 'Final-year CS student with two Kaggle medals and a passion for forecasting.'),
-    app('app_7', 'job_mobile_rn', 'usr_candidate2', 'rejected', 9, 'I have shipped three React Native apps with 100k+ downloads each.'),
-    app('app_8', 'job_backend_go', 'usr_candidate4', 'hired', 11, 'Four years building payment services in Go and PostgreSQL, including a ledger that handles 2M transactions a day.'),
-    app('app_9', 'job_devops_contract', 'usr_candidate4', 'reviewing', 3, 'I have migrated two companies to Terraform and hardened EKS clusters for PCI compliance. Available to start immediately.'),
-    app('app_10', 'job_content_pt', 'usr_candidate5', 'shortlisted', 6, 'I write product copy and long-form content for fintech brands, and a three-day week suits me perfectly.'),
-    app('app_11', 'job_product_designer', 'usr_candidate5', 'reviewing', 2, 'Product designer with a background in content design — I love turning research into clear, simple flows.'),
-    app('app_12', 'job_data_intern', 'usr_candidate6', 'applied', 1, 'Final-year student who has built forecasting models for a local retail chain. Keen to learn from your ML team.'),
-    app('app_13', 'job_mobile_rn', 'usr_candidate6', 'shortlisted', 7, 'Full-stack engineer who has shipped two React Native apps; I care a lot about smooth animations and offline support.'),
-    app('app_14', 'job_qa_contract', 'usr_candidate4', 'rejected', 13, 'I have built Playwright suites from scratch for three product teams and integrated them into CI.'),
-    app('app_15', 'job_content_pt', 'usr_candidate3', 'applied', 0, 'I run a small newsletter about personal finance and would love to write for Lumen Pay part-time.'),
-    app('app_16', 'job_devops_contract', 'usr_candidate6', 'applied', 2, 'Comfortable with Kubernetes, Terraform and GitHub Actions; happy to work async across time zones.'),
-    app('app_17', 'job_senior_fe', 'usr_candidate6', 'rejected', 4, 'Full-stack engineer with strong React skills and an interest in data visualisation.'),
+    app('app_1', 'job_senior_fe', 'usr_candidate1', APP_PATHS['app_1'].at(-1)!, 1, 'I have led frontend at two SaaS startups and love building data-heavy interfaces. Would be thrilled to help shape your visualization layer.'),
+    app('app_2', 'job_backend_go', 'usr_candidate1', APP_PATHS['app_2'].at(-1)!, 2, 'Go has been my primary language for 3 years, most recently on a payments reconciliation service.'),
+    app('app_3', 'job_product_designer', 'usr_candidate1', APP_PATHS['app_3'].at(-1)!, 3, 'Designer with a strong systems background — portfolio linked in my resume.'),
+    app('app_4', 'job_senior_fe', 'usr_candidate2', APP_PATHS['app_4'].at(-1)!, 1, 'Seven years of React experience, including a large-scale migration to TypeScript.'),
+    app('app_5', 'job_senior_fe', 'usr_candidate3', APP_PATHS['app_5'].at(-1)!, 0, 'Accessibility advocate and frontend engineer — I would love to chat.'),
+    app('app_6', 'job_data_intern', 'usr_candidate3', APP_PATHS['app_6'].at(-1)!, 5, 'Final-year CS student with two Kaggle medals and a passion for forecasting.'),
+    app('app_7', 'job_mobile_rn', 'usr_candidate2', APP_PATHS['app_7'].at(-1)!, 9, 'I have shipped three React Native apps with 100k+ downloads each.'),
+    app('app_8', 'job_backend_go', 'usr_candidate4', APP_PATHS['app_8'].at(-1)!, 11, 'Four years building payment services in Go and PostgreSQL, including a ledger that handles 2M transactions a day.'),
+    app('app_9', 'job_devops_contract', 'usr_candidate4', APP_PATHS['app_9'].at(-1)!, 3, 'I have migrated two companies to Terraform and hardened EKS clusters for PCI compliance. Available to start immediately.'),
+    app('app_10', 'job_content_pt', 'usr_candidate5', APP_PATHS['app_10'].at(-1)!, 6, 'I write product copy and long-form content for fintech brands, and a three-day week suits me perfectly.'),
+    app('app_11', 'job_product_designer', 'usr_candidate5', APP_PATHS['app_11'].at(-1)!, 2, 'Product designer with a background in content design — I love turning research into clear, simple flows.'),
+    app('app_12', 'job_data_intern', 'usr_candidate6', APP_PATHS['app_12'].at(-1)!, 1, 'Final-year student who has built forecasting models for a local retail chain. Keen to learn from your ML team.'),
+    app('app_13', 'job_mobile_rn', 'usr_candidate6', APP_PATHS['app_13'].at(-1)!, 7, 'Full-stack engineer who has shipped two React Native apps; I care a lot about smooth animations and offline support.'),
+    app('app_14', 'job_qa_contract', 'usr_candidate4', APP_PATHS['app_14'].at(-1)!, 13, 'I have built Playwright suites from scratch for three product teams and integrated them into CI.'),
+    app('app_15', 'job_content_pt', 'usr_candidate3', APP_PATHS['app_15'].at(-1)!, 0, 'I run a small newsletter about personal finance and would love to write for Lumen Pay part-time.'),
+    app('app_16', 'job_devops_contract', 'usr_candidate6', APP_PATHS['app_16'].at(-1)!, 2, 'Comfortable with Kubernetes, Terraform and GitHub Actions; happy to work async across time zones.'),
+    app('app_17', 'job_senior_fe', 'usr_candidate6', APP_PATHS['app_17'].at(-1)!, 4, 'Full-stack engineer with strong React skills and an interest in data visualisation.'),
   ];
 
-  return { users, jobs, applications };
+  // Candidate profiles: every demo candidate has completed theirs, including a resume.
+  const profiles: CandidateProfile[] = users
+    .filter((u) => u.role === 'candidate')
+    .map((u) => ({
+      userId: u.id,
+      phone: CANDIDATE_DETAILS[u.id]?.phone ?? '',
+      skills: CANDIDATE_DETAILS[u.id]?.skills ?? [],
+      yearsExperience: CANDIDATE_DETAILS[u.id]?.years ?? 0,
+      resumePath: profileResumePath(u.id),
+      resumeName: resumeFileName(u.name),
+      resumeSize: 1800,
+      updatedAt: u.createdAt,
+    }));
+
+  // Status history: steps spread over the days after applying. Each change also produces an
+  // email-style notification to the candidate; each application notifies the recruiter.
+  const history: StatusChange[] = [];
+  const notifications: Notification[] = [];
+  for (const a of applications) {
+    const path = APP_PATHS[a.id] ?? ['applied'];
+    const job = jobs.find((j) => j.id === a.jobId)!;
+    const cand = users.find((u) => u.id === a.candidateId)!;
+    const recruiter = users.find((u) => u.id === job.recruiterId)!;
+    const start = new Date(a.createdAt).getTime();
+    const end = Math.max(start, Math.min(Date.now() - 3600000, start + path.length * 26 * 3600000));
+    path.forEach((st, i) => {
+      const at = new Date(i === 0 ? start : start + ((end - start) * i) / Math.max(1, path.length - 1)).toISOString();
+      history.push({
+        id: `hist_${a.id}_${i}`,
+        applicationId: a.id,
+        fromStatus: i === 0 ? null : path[i - 1],
+        toStatus: st,
+        changedBy: i === 0 ? a.candidateId : job.recruiterId,
+        changedAt: at,
+      });
+      if (i > 0) {
+        const mail = statusEmail(st, cand.name, job.title, job.company);
+        notifications.push({ id: `ntf_${a.id}_${i}`, userId: cand.id, toEmail: cand.email, applicationId: a.id, createdAt: at, ...mail });
+      }
+    });
+    a.updatedAt = history[history.length - 1].changedAt;
+    notifications.push({
+      id: `ntf_${a.id}_new`,
+      userId: recruiter.id,
+      toEmail: recruiter.email,
+      applicationId: a.id,
+      createdAt: a.createdAt,
+      subject: `New application: ${cand.name} for ${job.title}`,
+      body: `Hi ${recruiter.name.split(' ')[0]},\n\n${cand.name} applied for ${job.title}. Open My Jobs → View applicants to read their cover note and resume.`,
+    });
+  }
+
+  return { users, jobs, profiles, applications, history, notifications };
 }
 
 /** Background shown on each demo candidate's resume. */
@@ -358,14 +479,17 @@ function resumePdf(user: User, job: Job | undefined): Buffer {
 
 /** Full demo data set: rows (with password hashes) plus a resume PDF for every application. */
 export function buildSeed(): SeedData {
-  const { users, jobs, applications } = records();
+  const data = records();
   const passwordHash = hashPassword(DEMO_PASSWORD);
-  for (const u of users) u.passwordHash = passwordHash;
-  const files = applications.map((a) => ({
-    path: a.resumePath,
-    data: resumePdf(users.find((u) => u.id === a.candidateId)!, jobs.find((j) => j.id === a.jobId)),
-  }));
-  return { users, jobs, applications, files };
+  for (const u of data.users) u.passwordHash = passwordHash;
+  const files = [
+    ...data.applications.map((a) => ({
+      path: a.resumePath,
+      data: resumePdf(data.users.find((u) => u.id === a.candidateId)!, data.jobs.find((j) => j.id === a.jobId)),
+    })),
+    ...data.profiles.map((p) => ({ path: p.resumePath!, data: resumePdf(data.users.find((u) => u.id === p.userId)!, undefined) })),
+  ];
+  return { ...data, files };
 }
 
 /**
@@ -373,7 +497,12 @@ export function buildSeed(): SeedData {
  * Lets demo data loaded with plain SQL (supabase/seed.sql) show resumes without uploading files.
  */
 export function demoResume(path: string): Buffer | null {
-  const { users, jobs, applications } = records();
+  const { users, jobs, applications, profiles } = records();
+  const profile = profiles.find((p) => p.resumePath === path);
+  if (profile) {
+    const u = users.find((x) => x.id === profile.userId);
+    return u ? resumePdf(u, undefined) : null;
+  }
   const app = applications.find((a) => a.resumePath === path);
   if (!app) return null;
   const user = users.find((u) => u.id === app.candidateId);

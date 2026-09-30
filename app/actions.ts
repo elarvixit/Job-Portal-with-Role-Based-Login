@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import * as repo from '@/lib/repo';
 import { hashPassword, verifyPassword } from '@/lib/password';
+import { cleanSkills, todayISO } from '@/lib/rules';
 import { SESSION_COOKIE, SESSION_MAX_AGE, dashboardFor, signSession } from '@/lib/session';
 import { getCurrentUser, requireRole } from '@/lib/auth';
 import { APPLICATION_STATUSES, JOB_TYPES, type ApplicationStatus, type Job, type JobType, type Role } from '@/lib/types';
@@ -13,6 +14,7 @@ export interface FormState {
   error?: string;
   fieldErrors?: Record<string, string>;
   values?: Record<string, string>;
+  saved?: boolean;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -106,8 +108,11 @@ export async function saveJobAction(_prev: FormState, formData: FormData): Promi
     location: String(formData.get('location') ?? '').trim(),
     type: String(formData.get('type') ?? ''),
     salary: String(formData.get('salary') ?? '').trim(),
+    skills: String(formData.get('skills') ?? ''),
+    deadline: String(formData.get('deadline') ?? '').trim(),
     status: String(formData.get('status') ?? 'open'),
   };
+  const skills = cleanSkills(values.skills);
 
   const fieldErrors: Record<string, string> = {};
   if (values.title.length < 3) fieldErrors.title = 'Title must be at least 3 characters.';
@@ -118,10 +123,19 @@ export async function saveJobAction(_prev: FormState, formData: FormData): Promi
   if (values.location.length < 2) fieldErrors.location = 'Enter a location, or "Remote".';
   if (!JOB_TYPES.includes(values.type as JobType)) fieldErrors.type = 'Choose a job type.';
   if (!values.salary) fieldErrors.salary = 'Enter a salary or range.';
+  if (!skills.length) fieldErrors.skills = 'Add at least one required skill.';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(values.deadline)) fieldErrors.deadline = 'Choose the last day to apply.';
+  else if (!id && values.deadline < todayISO()) fieldErrors.deadline = 'The deadline can’t be in the past.';
   if (values.status !== 'open' && values.status !== 'closed') fieldErrors.status = 'Choose a status.';
   if (Object.keys(fieldErrors).length) return { fieldErrors, values };
 
-  const input: repo.JobInput = { ...values, type: values.type as JobType, status: values.status as Job['status'] };
+  const input: repo.JobInput = {
+    ...values,
+    skills,
+    deadline: values.deadline,
+    type: values.type as JobType,
+    status: values.status as Job['status'],
+  };
 
   if (id) {
     const outcome = await repo.updateJob(id, recruiter.id, input);
@@ -142,6 +156,45 @@ export async function toggleJobStatusAction(formData: FormData) {
   revalidatePath('/', 'layout');
 }
 
+/** Permanently deletes one of the recruiter's own jobs, with its applications. */
+export async function deleteJobAction(formData: FormData) {
+  const recruiter = await requireRole('recruiter');
+  const outcome = await repo.deleteJob(String(formData.get('id') ?? ''), recruiter.id);
+  if (outcome === 'forbidden') redirect('/403');
+  revalidatePath('/', 'layout');
+  redirect('/recruiter/jobs?saved=deleted');
+}
+
+/* ─────────────────────────── Profile ─────────────────────────── */
+
+export async function saveProfileAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await requireRole('candidate');
+  const values = {
+    name: String(formData.get('name') ?? '').trim(),
+    phone: String(formData.get('phone') ?? '').trim(),
+    skills: String(formData.get('skills') ?? ''),
+    yearsExperience: String(formData.get('yearsExperience') ?? '').trim(),
+  };
+  const skills = cleanSkills(values.skills);
+  const years = Number(values.yearsExperience);
+
+  const fieldErrors: Record<string, string> = {};
+  if (values.name.length < 2) fieldErrors.name = 'Please enter your full name.';
+  if (!/^\+?[0-9][0-9 ()-]{6,19}$/.test(values.phone)) fieldErrors.phone = 'Enter a phone number, e.g. +91 98765 43210.';
+  if (!skills.length) fieldErrors.skills = 'Add at least one skill.';
+  if (!values.yearsExperience || !Number.isInteger(years) || years < 0 || years > 60) {
+    fieldErrors.yearsExperience = 'Enter whole years between 0 and 60.';
+  }
+  if (Object.keys(fieldErrors).length) return { fieldErrors, values };
+
+  await Promise.all([
+    repo.saveProfile(user.id, { phone: values.phone, skills, yearsExperience: years }),
+    values.name !== user.name ? repo.renameUser(user.id, values.name) : null,
+  ]);
+  revalidatePath('/', 'layout');
+  return { values: { ...values, skills: skills.join(', ') }, saved: true };
+}
+
 /* ───────────────────────── Applications ───────────────────────── */
 
 export async function updateApplicationStatusAction(
@@ -152,8 +205,14 @@ export async function updateApplicationStatusAction(
   if (!user || user.role !== 'recruiter') return { ok: false, error: 'Not authorized.' };
   if (!APPLICATION_STATUSES.includes(status as ApplicationStatus)) return { ok: false, error: 'Invalid status.' };
 
-  const outcome = await repo.updateApplicationStatus(applicationId, user.id, status as ApplicationStatus);
-  if (outcome !== 'ok') return { ok: false, error: outcome === 'missing' ? 'Application not found.' : 'Not authorized.' };
+  // Ownership is checked in the repository: a recruiter can only change applications to their own jobs.
+  const outcome = await repo.updateApplicationStatus({
+    applicationId,
+    recruiterId: user.id,
+    status: status as ApplicationStatus,
+  });
+  if (outcome === 'missing') return { ok: false, error: 'Application not found.' };
+  if (outcome === 'forbidden') return { ok: false, error: 'Not authorized.' };
   revalidatePath('/', 'layout');
   return { ok: true };
 }

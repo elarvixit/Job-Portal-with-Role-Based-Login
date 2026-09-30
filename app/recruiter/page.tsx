@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { listApplicationsForJobs, listJobsByRecruiter } from '@/lib/repo';
 import { initials, timeAgo } from '@/lib/format';
+import ApplicationsChart from '@/components/ApplicationsChart';
 import { CountUp, EmptyState, StatusBadge } from '@/components/ui';
 import { BriefcaseIcon, EditIcon, EyeIcon, FileIcon, InboxIcon, PlusIcon, StarIcon, UsersIcon } from '@/components/icons';
 
@@ -81,6 +82,8 @@ export default async function RecruiterDashboard() {
           </div>
         </div>
       </div>
+
+      <ApplicationsChart jobs={myJobs} apps={apps} />
 
       <div className="split">
         <div className="card">
@@ -184,7 +187,7 @@ export default async function RecruiterDashboard() {
             <strong>
               <EyeIcon size={16} /> Set the status
             </strong>
-            <p>Pick In review, Shortlisted, Hired or Rejected. The candidate sees it instantly.</p>
+            <p>Move them to Shortlisted, Interview, Offered or Rejected. Each change is logged and the candidate is notified.</p>
           </div>
         </div>
       </section>

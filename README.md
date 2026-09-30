@@ -2,10 +2,34 @@
 
 A modern job portal built with **Next.js 15 (App Router)**, **React 19**, **TypeScript** and **Supabase**, with two roles:
 
-- **Candidate** — browse & search jobs, view details, apply with a PDF resume, track applications.
-- **Recruiter** — post, edit, close/reopen jobs, review applicants, open resumes, change application status.
+- **Candidate** — completes a profile (phone, skills, experience, PDF resume), searches and filters jobs, applies once
+  per job before the deadline, and follows every status change.
+- **Recruiter** — posts jobs (skills, deadline), edits / closes / deletes their own jobs, reviews applicants with a
+  skill-match score, opens resumes and moves candidates through Applied → Shortlisted → Interview → Offered / Rejected.
 
-All data (users, jobs, applications) is stored in **Supabase Postgres**, and resumes in a private **Supabase Storage** bucket.
+All data is stored in **Supabase Postgres**, and resumes in a private **Supabase Storage** bucket.
+
+## Requirements checklist
+
+| Requirement | Where it lives |
+| --- | --- |
+| Sign up / log in as either role; hashed passwords; signed session cookie | `app/actions.ts`, `lib/password.ts` (scrypt), `lib/session.ts` (HMAC-SHA256, httpOnly) |
+| Wrong role can't reach the other role's pages (typed URL) | `middleware.ts` redirects; every page calls `requireRole()`; every API checks the role |
+| Recruiter posts a job: title, company, location, salary, skills (tags), description, deadline | `/recruiter/jobs/new`, `components/JobForm.tsx`, `saveJobAction` |
+| Edit, close or delete **own** jobs only | `updateJob` / `toggleJobStatus` / `deleteJob` check `recruiter_id` → 403 otherwise |
+| Candidate profile: name, phone, skills, years of experience, resume (PDF, max 2 MB) | `/candidate/profile`, `POST /api/profile/resume` (size, type and `%PDF-` signature checked on the server; bucket also limited to 2 MB) |
+| Browse open jobs, filter by location and skill, search by title | Home page (`app/page.tsx`) |
+| Apply once per job; a second apply is refused | `POST /api/applications` → 409, plus a `unique (job_id, candidate_id)` constraint |
+| Applications after the deadline are blocked | `applyBlocker()` in `lib/rules.ts`, enforced in `POST /api/applications` |
+| Recruiter sees applicants per job, opens the resume, changes status | `/recruiter/jobs/[id]/applications`, `GET /api/resumes/[id]` |
+| Statuses Applied → Shortlisted → Interview → Offered / Rejected | `APPLICATION_STATUSES` in `lib/types.ts`; DB check constraint |
+| Candidate sees all applications with current status | `/candidate/applications` (with a progress tracker) |
+| A recruiter only sees applicants for their own jobs | ownership checked in the page, the status action and the resume route |
+| Status changes logged with a timestamp, visible to the recruiter | `…_status_history` table; *History* timeline on the applicants page |
+| Closing a job hides it from candidates but keeps its applications | closed jobs leave the job board; applicants and the candidate's own application stay visible |
+| Stretch: match score | `matchScore()` — % of the job's skills the candidate has, on the applicants list and job page |
+| Stretch: email-style notification log | `…_notifications` table; `/candidate/notifications` and `/recruiter/notifications` |
+| Stretch: applications-per-job bar chart | `components/ApplicationsChart.tsx` on the recruiter dashboard |
 
 ## Quick start (local mode, no setup)
 
@@ -26,19 +50,24 @@ Once the Supabase variables below are set, the app uses Supabase automatically (
 
 1. Create a free project at [supabase.com](https://supabase.com/dashboard).
 2. Open **SQL Editor → New query**, paste the contents of [`supabase/schema.sql`](supabase/schema.sql) and click **Run**.
-   It creates these tables and a private resume bucket (PDF only, 5 MB max):
+   It creates these tables and a private resume bucket (PDF only, 2 MB max). It is safe to run again, and it upgrades
+   a database made with an earlier version without losing data:
 
    | Object  | Name |
    | ------- | ---- |
    | Table   | `Bhargavi_Job Portal with role-based login_users` |
    | Table   | `Bhargavi_Job Portal with role-based login_jobs` |
+   | Table   | `Bhargavi_Job Portal with role-based login_candidate_profiles` |
    | Table   | `Bhargavi_Job Portal with role-based login_applications` |
+   | Table   | `Bhargavi_Job Portal with role-based login_status_history` |
+   | Table   | `Bhargavi_Job Portal with role-based login_notifications` |
    | Bucket  | `bhargavi-job-portal-resumes` |
 
    The names contain spaces, so wrap them in double quotes in SQL:
    `select * from "Bhargavi_Job Portal with role-based login_jobs";`. They are defined once in
    [`lib/tables.ts`](lib/tables.ts) and must match the SQL.
-3. *(Optional)* Run [`supabase/seed.sql`](supabase/seed.sql) the same way to add demo users and jobs.
+3. *(Optional)* Run [`supabase/seed.sql`](supabase/seed.sql) the same way to add the demo data: 8 users, 8 jobs,
+   6 candidate profiles, 17 applications with their status history, and notifications.
 4. Open **Project Settings → API Keys** and copy the project URL, the public (anon / publishable) key and the
    secret (service_role / secret) key.
 
@@ -108,9 +137,13 @@ All demo accounts use the password `password123`.
   and recruiters touching another recruiter's job get the `/403` page.
 - **Data** — all queries run on the server with the service-role key (`lib/repo.ts`). Row Level Security is enabled
   on every table with no policies, so the public anon key cannot read or write any data.
-- **Resumes** — to stay under Vercel's 4.5 MB request limit, the browser uploads the PDF directly to Storage:
-  1. `POST /api/applications/upload-url` checks the candidate may apply and returns a one-time signed upload URL.
-  2. The browser uploads the file to the private `bhargavi-job-portal-resumes` bucket (the bucket itself enforces PDF + 5 MB).
-  3. `POST /api/applications` downloads and verifies the file (size and `%PDF-` signature), then saves the application.
-
-  `GET /api/resumes/[id]` lets only the applicant or the job's recruiter open a resume, via a 60-second signed link.
+- **Resumes** — the candidate uploads one resume to their profile through `POST /api/profile/resume`, which accepts
+  only a PDF of at most 2 MB and checks the `%PDF-` file signature (the Storage bucket also enforces PDF + 2 MB).
+  When they apply, the server copies that file for the application, so later profile changes never alter what a
+  recruiter received. `GET /api/resumes/[id]` lets only the applicant or the job's recruiter open it, via a
+  60-second signed link.
+- **Applying** — `POST /api/applications` enforces every rule on the server: candidates only, open job, deadline not
+  passed, complete profile, cover note length, and once per job (also a unique constraint in the database). It writes
+  the first status-history entry and notifies the recruiter.
+- **Status changes** — `updateApplicationStatusAction` checks the recruiter owns the job, then updates the status,
+  appends a timestamped `status_history` row and records an email-style notification for the candidate.

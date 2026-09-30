@@ -4,7 +4,8 @@ import { requireRole } from '@/lib/auth';
 import { listApplicationsForJobs, listJobsByRecruiter } from '@/lib/repo';
 import { formatDate } from '@/lib/format';
 import { toggleJobStatusAction } from '@/app/actions';
-import { CompanyLogo, EmptyState, StatusBadge } from '@/components/ui';
+import { CompanyLogo, DeadlineChip, EmptyState, SkillTags, StatusBadge } from '@/components/ui';
+import DeleteJobButton from '@/components/DeleteJobButton';
 import SubmitButton from '@/components/SubmitButton';
 import Toast from '@/components/Toast';
 import { BriefcaseIcon, BulbIcon, EditIcon, PlusIcon, PowerIcon, UsersIcon } from '@/components/icons';
@@ -46,9 +47,9 @@ export default async function MyJobsPage({ searchParams }: { searchParams: Promi
         <p className="hint">
           <BulbIcon size={17} />
           <span>
-            <strong>View applicants</strong> shows who applied to each job. <strong>Close</strong> hides a job from the
-            job board and stops new applications — you keep the applicants, and you can <strong>Reopen</strong> it any
-            time.
+            <strong>View applicants</strong> shows who applied to each job. <strong>Close</strong> hides a job from
+            candidates and stops new applications, but keeps every application; <strong>Reopen</strong> brings it back.{' '}
+            <strong>Delete</strong> removes the job and its applications for good.
           </span>
         </p>
       )}
@@ -62,7 +63,7 @@ export default async function MyJobsPage({ searchParams }: { searchParams: Promi
                   <th>Job</th>
                   <th>Status</th>
                   <th>Applicants</th>
-                  <th>Posted</th>
+                  <th>Deadline</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -81,6 +82,11 @@ export default async function MyJobsPage({ searchParams }: { searchParams: Promi
                             <div className="s">
                               {job.location} · {job.type} · {job.salary}
                             </div>
+                            {job.skills.length > 0 && (
+                              <div style={{ marginTop: 6 }}>
+                                <SkillTags skills={job.skills} max={3} />
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -91,8 +97,9 @@ export default async function MyJobsPage({ searchParams }: { searchParams: Promi
                         <strong>{c.total}</strong>
                         {c.fresh > 0 && <div className="s">{c.fresh} new</div>}
                       </td>
-                      <td className="num" style={{ whiteSpace: 'nowrap' }}>
-                        {formatDate(job.createdAt)}
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        {job.deadline ? <DeadlineChip job={job} /> : <span className="s">None</span>}
+                        <div className="s">Posted {formatDate(job.createdAt)}</div>
                       </td>
                       <td>
                         <div className="actions">
@@ -110,6 +117,7 @@ export default async function MyJobsPage({ searchParams }: { searchParams: Promi
                           <Link href={`/recruiter/jobs/${job.id}/applications`} className="btn btn-secondary btn-sm">
                             <UsersIcon size={15} /> View applicants
                           </Link>
+                          <DeleteJobButton jobId={job.id} applicants={c.total} />
                         </div>
                       </td>
                     </tr>
@@ -135,6 +143,7 @@ export default async function MyJobsPage({ searchParams }: { searchParams: Promi
 
       {saved === 'created' && <Toast message="Job posted successfully" />}
       {saved === 'updated' && <Toast message="Job updated" />}
+      {saved === 'deleted' && <Toast message="Job deleted" />}
     </div>
   );
 }

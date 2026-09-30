@@ -30,6 +30,8 @@ export default async function NewJobPage() {
           location: '',
           type: 'Full-time',
           salary: '',
+          skills: [],
+          deadline: '',
           status: 'open',
         }}
       />

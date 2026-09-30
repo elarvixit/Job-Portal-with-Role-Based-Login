@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
 import { listOpenJobs } from '@/lib/repo';
+import { isPastDeadline } from '@/lib/rules';
 import { JOB_TYPES } from '@/lib/types';
 import HowItWorks from '@/components/HowItWorks';
 import { CountUp, EmptyState, JobCard } from '@/components/ui';
-import { BriefcaseIcon, CheckIcon, PinIcon, SearchIcon, StarIcon } from '@/components/icons';
+import { BriefcaseIcon, CheckIcon, PinIcon, SearchIcon, SparkIcon, StarIcon } from '@/components/icons';
 
-type SP = { q?: string; location?: string; type?: string };
+type SP = { q?: string; location?: string; type?: string; skill?: string };
 
 function buildHref(sp: SP, patch: Partial<SP>) {
   const merged = { ...sp, ...patch };
@@ -21,22 +22,34 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const q = (sp.q ?? '').trim();
   const location = sp.location ?? '';
   const type = sp.type ?? '';
+  const skill = sp.skill ?? '';
 
   const [openJobs, user] = await Promise.all([listOpenJobs(), getCurrentUser()]);
   const locations = [...new Set(openJobs.map((j) => j.location))].sort((a, b) =>
     a === 'Remote' ? -1 : b === 'Remote' ? 1 : a.localeCompare(b),
   );
+  // Every skill any open job asks for, most requested first.
+  const skillCounts = new Map<string, number>();
+  for (const j of openJobs) for (const sk of j.skills) skillCounts.set(sk, (skillCounts.get(sk) ?? 0) + 1);
+  const allSkills = [...skillCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([sk]) => sk);
 
+  // Search by job title (or company); filter by location, skill and job type.
   const needle = q.toLowerCase();
+  const hasSkill = (j: (typeof openJobs)[number]) => !skill || j.skills.some((x) => x.toLowerCase() === skill.toLowerCase());
   const matchesQL = openJobs.filter(
     (j) =>
-      (!needle || [j.title, j.company, j.description].some((f) => f.toLowerCase().includes(needle))) &&
-      (!location || j.location === location),
+      (!needle || j.title.toLowerCase().includes(needle) || j.company.toLowerCase().includes(needle)) &&
+      (!location || j.location === location) &&
+      hasSkill(j),
   );
-  const jobs = matchesQL.filter((j) => !type || j.type === type);
+  // Jobs still accepting applications first; ones past their deadline last.
+  const jobs = matchesQL
+    .filter((j) => !type || j.type === type)
+    .sort((a, b) => Number(isPastDeadline(a)) - Number(isPastDeadline(b)));
 
+  const accepting = openJobs.filter((j) => !isPastDeadline(j));
   const companies = new Set(openJobs.map((j) => j.company)).size;
-  const hasFilters = Boolean(q || location || type);
+  const hasFilters = Boolean(q || location || type || skill);
 
   return (
     <>
@@ -48,7 +61,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <HeroVisual />
           <div className="hero-copy">
           <div className="hero-eyebrow fade-up">
-            <span className="pulse" /> {openJobs.length} open roles hiring now
+            <span className="pulse" /> {accepting.length} open roles hiring now
           </div>
           <h1 className="fade-up">
             Find work that <span className="serif">fits your life,</span> not the other way around.
@@ -61,7 +74,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <label className="search-field">
               <SearchIcon />
               <span className="sr-only">Keyword</span>
-              <input name="q" defaultValue={q} placeholder="Job title, company or keyword" autoComplete="off" />
+              <input name="q" defaultValue={q} placeholder="Search by job title" autoComplete="off" />
             </label>
             <label className="search-field">
               <PinIcon />
@@ -71,6 +84,18 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 {locations.map((l) => (
                   <option key={l} value={l}>
                     {l}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="search-field">
+              <SparkIcon />
+              <span className="sr-only">Skill</span>
+              <select name="skill" defaultValue={skill}>
+                <option value="">Any skill</option>
+                {allSkills.map((sk) => (
+                  <option key={sk} value={sk}>
+                    {sk}
                   </option>
                 ))}
               </select>
@@ -130,6 +155,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                   </>
                 )}
                 {location && <> in {location}</>}
+                {skill && <> needing {skill}</>}
               </p>
             </div>
             {hasFilters && (
@@ -152,6 +178,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <Link href={buildHref(sp, { location: location === 'Remote' ? '' : 'Remote' })} className={`pill${location === 'Remote' ? ' active' : ''}`}>
               <PinIcon size={14} /> Remote only
             </Link>
+            {allSkills.slice(0, 5).map((sk) => (
+              <Link key={sk} href={buildHref(sp, { skill: skill === sk ? '' : sk })} className={`pill${skill === sk ? ' active' : ''}`}>
+                <SparkIcon size={13} /> {sk}
+              </Link>
+            ))}
           </div>
 
           {jobs.length ? (

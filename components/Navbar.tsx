@@ -19,6 +19,8 @@ type NavItem = { href: string; label: string; match: (p: string) => boolean };
 const CANDIDATE_LINKS: NavItem[] = [
   { href: '/', label: 'Jobs', match: (p) => p === '/' || p.startsWith('/jobs') },
   { href: '/candidate/applications', label: 'My Applications', match: (p) => p.startsWith('/candidate/applications') },
+  { href: '/candidate/profile', label: 'Profile', match: (p) => p.startsWith('/candidate/profile') },
+  { href: '/candidate/notifications', label: 'Notifications', match: (p) => p.startsWith('/candidate/notifications') },
 ];
 
 const RECRUITER_LINKS: NavItem[] = [
@@ -28,6 +30,7 @@ const RECRUITER_LINKS: NavItem[] = [
     match: (p) => p.startsWith('/recruiter/jobs') && p !== '/recruiter/jobs/new',
   },
   { href: '/recruiter/jobs/new', label: 'Post a Job', match: (p) => p === '/recruiter/jobs/new' },
+  { href: '/recruiter/notifications', label: 'Notifications', match: (p) => p.startsWith('/recruiter/notifications') },
 ];
 
 export default function Navbar({ user }: { user: NavUser | null }) {

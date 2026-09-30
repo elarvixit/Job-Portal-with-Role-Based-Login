@@ -3,17 +3,17 @@ import type { Role } from '@/lib/types';
 import { ArrowRight, BriefcaseIcon, UserIcon } from './icons';
 
 const CANDIDATE_STEPS = [
-  { t: 'Create a free candidate account', d: 'Sign up with your name and email — it takes 30 seconds.' },
-  { t: 'Find a role you like', d: 'Search by keyword, filter by location or job type, and open any job to read the details.' },
-  { t: 'Apply with your resume', d: 'Write a short cover note and drop in your PDF resume (up to 5 MB).' },
-  { t: 'Track your progress', d: 'My Applications shows every status change: Applied → In review → Shortlisted → Hired.' },
+  { t: 'Sign up and complete your profile', d: 'Add your phone, skills, years of experience and a PDF resume (up to 2 MB).' },
+  { t: 'Find a role you like', d: 'Search by job title and filter by location or skill. Each job shows how well your skills match.' },
+  { t: 'Apply once, before the deadline', d: 'Write a short cover note; your profile and resume are sent with it.' },
+  { t: 'Track your progress', d: 'My Applications shows every step: Applied → Shortlisted → Interview → Offered, and you get a notification each time.' },
 ];
 
 const RECRUITER_STEPS = [
   { t: 'Create a recruiter account', d: 'Choose “Recruiter” when you sign up — recruiters get their own dashboard.' },
-  { t: 'Post a job', d: 'Add the title, description, location, type and salary. It appears on the job board instantly.' },
-  { t: 'Review applicants', d: 'See every candidate for each job with their cover note, and open their PDF resume.' },
-  { t: 'Update the status', d: 'Move candidates to In review, Shortlisted, Hired or Rejected — they see it right away.' },
+  { t: 'Post a job', d: 'Add the title, company, location, salary, required skills, description and a deadline.' },
+  { t: 'Review applicants', d: 'See each candidate’s profile, skill match %, cover note and PDF resume. You only see your own jobs.' },
+  { t: 'Update the status', d: 'Move candidates to Shortlisted, Interview, Offered or Rejected. Every change is logged with a timestamp.' },
 ];
 
 /** Home page explainer for both kinds of user. The buttons adapt to who is logged in. */

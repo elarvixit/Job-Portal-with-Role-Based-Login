@@ -1,120 +1,41 @@
 'use client';
 
-import { useRef, useState, type DragEvent, type FormEvent } from 'react';
+import Link from 'next/link';
+import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatBytes } from '@/lib/format';import FieldError from './FieldError';
-import { AlertIcon, ArrowRight, UploadIcon, XIcon } from './icons';
+import { formatBytes } from '@/lib/format';
+import FieldError from './FieldError';
+import { AlertIcon, ArrowRight, EyeIcon } from './icons';
 
-const MAX_BYTES = 5 * 1024 * 1024;
 const MIN_NOTE = 20;
 const MAX_NOTE = 2000;
 
-async function postJson<T extends object = { ok: true }>(url: string, body: unknown): Promise<T | { error: string }> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string } & T;
-  if (!res.ok || !data.ok) return { error: data.error ?? 'Something went wrong. Please try again.' };
-  return data;
-}
-
-function validateFile(file: File): string | null {
-  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  if (!isPdf) return `“${file.name}” isn’t a PDF. Please upload your resume as a PDF file.`;
-  if (file.size > MAX_BYTES) return `That file is ${formatBytes(file.size)}. The maximum size is 5 MB.`;
-  if (file.size === 0) return 'That file appears to be empty.';
-  return null;
-}
-
-export default function ApplyForm({ jobId }: { jobId: string }) {
+/** Cover note + the resume from the candidate's profile. The server re-checks every rule. */
+export default function ApplyForm({ jobId, resume }: { jobId: string; resume: { name: string; size: number } }) {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [note, setNote] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  function pick(files: FileList | null) {
-    const f = files?.[0];
-    if (!f) return;
-    if (files && files.length > 1) {
-      setFileError('Please upload a single PDF file.');
-      return;
-    }
-    const err = validateFile(f);
-    setFileError(err);
-    setFile(err ? null : f);
-    setServerError(null);
-  }
-
-  function removeFile() {
-    setFile(null);
-    setFileError(null);
-    if (inputRef.current) inputRef.current.value = '';
-  }
-
-  function onDrop(e: DragEvent) {
-    e.preventDefault();
-    setDragging(false);
-    pick(e.dataTransfer.files);
-  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setServerError(null);
     const trimmed = note.trim();
-    let bad = false;
     if (trimmed.length < MIN_NOTE) {
       setNoteError(`Tell the recruiter a little more — at least ${MIN_NOTE} characters.`);
-      bad = true;
-    } else setNoteError(null);
-    if (!file) {
-      setFileError('Please attach your resume as a PDF.');
-      bad = true;
+      return;
     }
-    if (bad || !file) return;
-
+    setNoteError(null);
     setSubmitting(true);
     try {
-      // 1. Ask the server for a one-time upload URL (also checks we're allowed to apply).
-      const start = await postJson<{ applicationId: string; path: string; token: string; local: boolean }>(
-        '/api/applications/upload-url',
-        { jobId },
-      );
-      if ('error' in start) return setServerError(start.error);
-
-      // 2. Upload the PDF: straight to private Supabase Storage, or to this server in local mode.
-      if (start.local) {
-        const res = await fetch(`/api/applications/local-upload?applicationId=${start.applicationId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/pdf' },
-          body: file,
-        });
-        if (!res.ok) return setServerError('Your resume could not be uploaded. Please try again.');
-      } else {
-        const [{ supabaseBrowser }, { RESUME_BUCKET }] = await Promise.all([
-          import('@/lib/supabase-browser'),
-          import('@/lib/tables'),
-        ]);
-        const { error: uploadError } = await supabaseBrowser()
-          .storage.from(RESUME_BUCKET)
-          .uploadToSignedUrl(start.path, start.token, file, { contentType: 'application/pdf' });
-        if (uploadError) return setServerError('Your resume could not be uploaded. Please try again.');
-      }
-
-      // 3. Record the application; the server verifies the uploaded file.
-      const done = await postJson('/api/applications', {
-        jobId,
-        applicationId: start.applicationId,
-        coverNote: trimmed,
-        resumeName: file.name,
+      const res = await fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId, coverNote: trimmed }),
       });
-      if ('error' in done) return setServerError(done.error);
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) return setServerError(data.error ?? 'Something went wrong. Please try again.');
       router.refresh();
     } catch {
       setServerError('Network error — check your connection and try again.');
@@ -155,67 +76,26 @@ export default function ApplyForm({ jobId }: { jobId: string }) {
       </div>
 
       <div className="field">
-        <span className="label" id="resume-label">
-          Resume <span className="hint">PDF · max 5 MB</span>
+        <span className="label">
+          Resume <span className="hint">from your profile</span>
         </span>
-
-        {file ? (
-          <div className="file-pill">
-            <span className="pdf">PDF</span>
-            <div className="meta">
-              <div className="name" title={file.name}>
-                {file.name}
-              </div>
-              <div className="size">{formatBytes(file.size)} · Ready to upload</div>
+        <div className="file-pill">
+          <span className="pdf">PDF</span>
+          <div className="meta">
+            <div className="name" title={resume.name}>
+              {resume.name}
             </div>
-            <button type="button" className="icon-btn" onClick={removeFile} aria-label={`Remove ${file.name}`}>
-              <XIcon size={17} />
-            </button>
-          </div>
-        ) : (
-          <div
-            className={`dropzone${dragging ? ' dragging' : ''}${fileError ? ' invalid' : ''}`}
-            role="button"
-            tabIndex={0}
-            aria-labelledby="resume-label"
-            aria-describedby={fileError ? 'file-error' : undefined}
-            onClick={() => inputRef.current?.click()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                inputRef.current?.click();
-              }
-            }}
-            onDragEnter={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = 'copy';
-            }}
-            onDragLeave={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false);
-            }}
-            onDrop={onDrop}
-          >
-            <div className="dz-icon">
-              <UploadIcon size={20} />
+            <div className="size">
+              {formatBytes(resume.size)} ·{' '}
+              <Link href="/candidate/profile" className="link">
+                Change
+              </Link>
             </div>
-            <strong>
-              {dragging ? 'Drop your resume here' : <>Drag & drop or <span className="link">browse</span></>}
-            </strong>
-            <p>PDF only, up to 5 MB</p>
           </div>
-        )}
-        <input
-          ref={inputRef}
-          type="file"
-          accept="application/pdf,.pdf"
-          hidden
-          onChange={(e) => pick(e.target.files)}
-        />
-        <FieldError id="file-error" message={fileError ?? undefined} />
+          <a href="/api/profile/resume" target="_blank" rel="noopener" className="icon-btn" aria-label="View resume" title="View">
+            <EyeIcon size={17} />
+          </a>
+        </div>
       </div>
 
       <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={submitting}>

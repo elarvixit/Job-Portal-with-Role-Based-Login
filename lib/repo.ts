@@ -4,7 +4,13 @@ import * as supabase from './repo-supabase';
 import { isSupabaseConfigured } from './supabase';
 
 // Picks the storage backend: Supabase when its environment variables are set, otherwise local files.
-export type { ApplicationWithCandidate, ApplicationWithJob, JobInput, OwnedResult } from './repo-types';
+export type {
+  ApplicationWithCandidate,
+  ApplicationWithJob,
+  JobInput,
+  OwnedResult,
+  ProfileInput,
+} from './repo-types';
 
 type Repo = typeof supabase;
 
@@ -19,12 +25,17 @@ export const {
   getUserById,
   getUserByEmail,
   createUser,
+  renameUser,
+  getProfile,
+  saveProfile,
+  setProfileResume,
   listOpenJobs,
   listJobsByRecruiter,
   getJob,
   createJob,
   updateJob,
   toggleJobStatus,
+  deleteJob,
   listApplicationsByCandidate,
   listApplicationsForJobs,
   countApplicationsForJob,
@@ -32,11 +43,11 @@ export const {
   getApplicationWithOwner,
   createApplication,
   updateApplicationStatus,
-  createResumeUploadUrl,
+  listStatusHistory,
+  listNotifications,
+  uploadResume,
+  copyResume,
   downloadResume,
-  removeResume,
+  removeResumes,
   openResume,
 } = impl;
-
-/** Local mode only: store an uploaded resume on disk. */
-export const saveLocalResume = local.saveResume;

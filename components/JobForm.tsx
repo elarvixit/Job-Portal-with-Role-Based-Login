@@ -5,15 +5,29 @@ import { useActionState, useState } from 'react';
 import { saveJobAction, type FormState } from '@/app/actions';
 import { JOB_TYPES, type Job } from '@/lib/types';
 import FieldError from './FieldError';
+import TagInput from './TagInput';
 import { JobCard } from './ui';
 import { AlertIcon } from './icons';
 
-type Values = Pick<Job, 'title' | 'company' | 'description' | 'location' | 'type' | 'salary' | 'status'>;
+type Values = Pick<Job, 'title' | 'company' | 'description' | 'location' | 'type' | 'salary' | 'status'> & {
+  deadline: string;
+};
 
-export default function JobForm({ job, defaults }: { job?: Job; defaults: Values }) {
+export default function JobForm({
+  job,
+  defaults,
+  skillSuggestions = [],
+}: {
+  job?: Job;
+  defaults: Values & { skills: string[] };
+  skillSuggestions?: string[];
+}) {
   const [state, action, pending] = useActionState<FormState, FormData>(saveJobAction, {});
-  const [v, setV] = useState<Values>(defaults);
+  const { skills: initialSkills, ...initial } = defaults;
+  const [v, setV] = useState<Values>(initial);
+  const [skills, setSkills] = useState<string[]>(initialSkills);
   const fe = state.fieldErrors ?? {};
+  const minDate = new Date().toISOString().slice(0, 10);
   const set = <K extends keyof Values>(k: K) => (e: { target: { value: string } }) =>
     setV((prev) => ({ ...prev, [k]: e.target.value }));
 
@@ -23,6 +37,8 @@ export default function JobForm({ job, defaults }: { job?: Job; defaults: Values
     createdAt: job?.createdAt ?? new Date().toISOString(),
     updatedAt: '',
     ...v,
+    skills,
+    deadline: v.deadline || null,
     title: v.title || 'Job title',
     company: v.company || 'Company',
     location: v.location || 'Location',
@@ -90,6 +106,46 @@ export default function JobForm({ job, defaults }: { job?: Job; defaults: Values
                 </select>
                 <FieldError id="type-error" message={fe.type} />
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h2>Skills & deadline</h2>
+          <p>Candidates can filter jobs by skill, and see how well their skills match. Applications close after the deadline.</p>
+          <div className="form-grid">
+            <div className="field">
+              <label className="label" htmlFor="skills">
+                Required skills <span className="hint">press Enter after each</span>
+              </label>
+              <TagInput
+                id="skills"
+                name="skills"
+                value={skills}
+                onChange={setSkills}
+                suggestions={skillSuggestions}
+                placeholder="e.g. React, then Enter"
+                invalid={Boolean(fe.skills)}
+                describedBy={fe.skills ? 'skills-error' : undefined}
+              />
+              <FieldError id="skills-error" message={fe.skills} />
+            </div>
+            <div className="field" style={{ maxWidth: 280 }}>
+              <label className="label" htmlFor="deadline">
+                Application deadline <span className="hint">last day to apply</span>
+              </label>
+              <input
+                id="deadline"
+                name="deadline"
+                type="date"
+                className={`input${fe.deadline ? ' invalid' : ''}`}
+                value={v.deadline}
+                min={job ? undefined : minDate}
+                onChange={set('deadline')}
+                aria-invalid={Boolean(fe.deadline) || undefined}
+                aria-describedby={fe.deadline ? 'deadline-error' : undefined}
+              />
+              <FieldError id="deadline-error" message={fe.deadline} />
             </div>
           </div>
         </div>

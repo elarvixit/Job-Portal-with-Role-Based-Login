@@ -1,29 +1,67 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { formatDate, hueFor, initials, timeAgo } from '@/lib/format';
+import { isPastDeadline, STATUS_LABEL as APP_STATUS_LABEL } from '@/lib/rules';
 import type { ApplicationStatus, Job, JobStatus } from '@/lib/types';
-import { ArrowUpRight, BriefcaseIcon, ClockIcon, PinIcon } from './icons';
+import { ArrowUpRight, BriefcaseIcon, CalendarIcon, ClockIcon, PinIcon } from './icons';
 
 const STATUS_LABEL: Record<ApplicationStatus | JobStatus, string> = {
-  applied: 'Applied',
-  reviewing: 'In review',
-  shortlisted: 'Shortlisted',
-  rejected: 'Rejected',
-  hired: 'Hired',
+  ...APP_STATUS_LABEL,
   open: 'Open',
   closed: 'Closed',
 };
 
 /** Plain-English meaning of each status, shown as a tooltip and in the dashboard guides. */
 export const STATUS_HELP: Record<ApplicationStatus | JobStatus, string> = {
-  applied: 'Sent to the recruiter. They haven’t opened it yet.',
-  reviewing: 'The recruiter is reading your cover note and resume.',
-  shortlisted: 'You’re on the shortlist. Expect to hear about next steps.',
+  applied: 'Sent to the recruiter, who hasn’t made a decision yet.',
+  shortlisted: 'The recruiter liked your application and put you on the shortlist.',
+  interview: 'The recruiter wants to interview you. Expect a message to arrange a time.',
+  offered: 'Congratulations — the company is offering you the job.',
   rejected: 'The recruiter decided not to move forward this time.',
-  hired: 'Congratulations — you got the job!',
-  open: 'Visible on the job board and accepting applications.',
-  closed: 'Hidden from the job board; no new applications.',
+  open: 'Visible on the job board and accepting applications until the deadline.',
+  closed: 'Hidden from candidates; existing applications stay visible.',
 };
+
+/** Skill tags. Matched skills (the viewer has them) are highlighted. */
+export function SkillTags({ skills, have, max }: { skills: string[]; have?: string[]; max?: number }) {
+  const mine = new Set((have ?? []).map((x) => x.toLowerCase()));
+  const shown = max ? skills.slice(0, max) : skills;
+  return (
+    <span className="skills">
+      {shown.map((sk) => (
+        <span key={sk} className={`skill${mine.has(sk.toLowerCase()) ? ' have' : ''}`}>
+          {sk}
+        </span>
+      ))}
+      {max && skills.length > max && <span className="skill more">+{skills.length - max}</span>}
+    </span>
+  );
+}
+
+/** Skill match as a percentage with a small meter. */
+export function MatchScore({ percent, title }: { percent: number; title?: string }) {
+  const tone = percent >= 75 ? 'high' : percent >= 40 ? 'mid' : 'low';
+  return (
+    <span className={`match ${tone}`} title={title}>
+      <span className="meter" aria-hidden>
+        <span style={{ width: `${percent}%` }} />
+      </span>
+      <strong>{percent}%</strong> match
+    </span>
+  );
+}
+
+/** "Apply by 12 Oct", or a warning once the deadline has passed. */
+export function DeadlineChip({ job }: { job: Pick<Job, 'deadline'> }) {
+  if (!job.deadline) return null;
+  const past = isPastDeadline(job);
+  const label = new Date(`${job.deadline}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return (
+    <span className={`chip deadline${past ? ' past' : ''}`}>
+      <CalendarIcon size={15} /> {past ? `Closed ${label}` : `Apply by ${label}`}
+    </span>
+  );
+}
 
 export function statusLabel(s: ApplicationStatus | JobStatus) {
   return STATUS_LABEL[s];
@@ -56,9 +94,9 @@ export function CountUp({ value }: { value: number }) {
   );
 }
 
-const TRACK = ['applied', 'reviewing', 'shortlisted', 'hired'] as const;
+const TRACK = ['applied', 'shortlisted', 'interview', 'offered'] as const;
 
-/** Where an application is in the hiring pipeline: Applied → In review → Shortlisted → Hired. */
+/** Where an application is in the hiring pipeline: Applied → Shortlisted → Interview → Offered. */
 export function StatusTracker({ status }: { status: ApplicationStatus }) {
   const steps =
     status === 'rejected'
@@ -73,7 +111,7 @@ export function StatusTracker({ status }: { status: ApplicationStatus }) {
         });
   return (
     <div
-      className={`tracker${status === 'rejected' ? ' rejected' : status === 'hired' ? ' hired' : ''}`}
+      className={`tracker${status === 'rejected' ? ' rejected' : status === 'offered' ? ' hired' : ''}`}
       role="img"
       aria-label={`Progress: ${STATUS_LABEL[status]}. ${STATUS_HELP[status]}`}
       title={STATUS_HELP[status]}
@@ -108,10 +146,15 @@ export function JobCard({ job, applicants, index = 0 }: { job: Job; applicants?:
         <span className="chip">
           <BriefcaseIcon size={15} /> {job.type}
         </span>
-        <span className="chip" title={formatDate(job.createdAt)}>
-          <ClockIcon size={15} /> {timeAgo(job.createdAt)}
-        </span>
+        {job.deadline ? (
+          <DeadlineChip job={job} />
+        ) : (
+          <span className="chip" title={formatDate(job.createdAt)}>
+            <ClockIcon size={15} /> {timeAgo(job.createdAt)}
+          </span>
+        )}
       </div>
+      {job.skills.length > 0 && <SkillTags skills={job.skills} max={4} />}
       <div className="job-card-foot">
         <div className="salary">
           <small>Compensation</small>
