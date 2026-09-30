@@ -49,9 +49,12 @@ Copy `.env.example` to `.env.local` and fill in:
 | Variable                         | Where it's used | Value |
 | -------------------------------- | --------------- | ----- |
 | `NEXT_PUBLIC_SUPABASE_URL`       | server + browser | Project URL, e.g. `https://abcd.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | browser (resume upload only) | anon / publishable key |
-| `SUPABASE_SERVICE_ROLE_KEY`      | server only | service_role / secret key — **never share or commit** |
-| `SESSION_SECRET`                 | server only | long random string that signs login cookies |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | browser (resume upload only) | anon / publishable key (`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` also accepted) |
+| `SUPABASE_SERVICE_ROLE_KEY`      | server only | service_role / secret key — **never share or commit** (`SUPABASE_SECRET_KEY` also accepted) |
+| `SESSION_SECRET` *(optional)*    | server only | long random string that signs login cookies; if unset, it is derived from the secret key |
+
+On Vercel, the setup page lists any setting that is missing or looks wrong (for example the anon and secret keys
+swapped) and the Supabase-related variable names the deployment can see — names only, never values.
 
 ### 3. Run it
 

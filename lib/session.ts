@@ -1,5 +1,6 @@
 // Edge-safe session helpers (used by middleware and server code).
 // Sessions are HMAC-SHA256 signed tokens stored in an httpOnly cookie.
+import { sessionSecret } from './env';
 import type { Role } from './types';
 
 export const SESSION_COOKIE = 'hl_session';
@@ -15,10 +16,11 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 function secret(): string {
-  const s = process.env.SESSION_SECRET;
-  if (!s && process.env.NODE_ENV === 'production') {
-    throw new Error('SESSION_SECRET must be set in production');
+  const s = sessionSecret();
+  if (!s && process.env.VERCEL) {
+    throw new Error('Set SESSION_SECRET or SUPABASE_SERVICE_ROLE_KEY in Vercel to enable logins');
   }
+  // Local mode without any keys: a fixed development key is fine because data never leaves this computer.
   return s || 'dev-only-insecure-session-secret-change-me';
 }
 
