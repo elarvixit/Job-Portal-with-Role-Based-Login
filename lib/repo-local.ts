@@ -10,7 +10,7 @@ import type {
   OwnedResult,
   ResumeSource,
 } from './repo-types';
-import { buildSeed } from './seed';
+import { buildSeed, demoResume } from './seed';
 import type { Application, ApplicationStatus, Job, PublicUser, User } from './types';
 
 // Local mode: used when Supabase isn't configured. Data lives in data/db.json and resumes in
@@ -248,7 +248,7 @@ export async function removeResume(p: string): Promise<void> {
 }
 
 export async function openResume(p: string): Promise<ResumeSource | null> {
-  const data = await downloadResume(p);
+  const data = (await downloadResume(p)) ?? demoResume(p);
   return data ? { data } : null;
 }
 

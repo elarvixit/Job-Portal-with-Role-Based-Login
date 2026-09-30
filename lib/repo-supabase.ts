@@ -7,6 +7,7 @@ import type {
   OwnedResult,
   ResumeSource,
 } from './repo-types';
+import { demoResume } from './seed';
 import { supabaseAdmin } from './supabase';
 import { RESUME_BUCKET, TABLES } from './tables';
 import type { Application, ApplicationStatus, Job, JobStatus, JobType, PublicUser, Role, User } from './types';
@@ -331,8 +332,18 @@ export async function removeResume(path: string): Promise<void> {
 
 /** A short-lived signed link to view a private resume. */
 export async function openResume(path: string): Promise<ResumeSource | null> {
-  const { data, error } = await supabaseAdmin().storage.from(RESUME_BUCKET).createSignedUrl(path, 60);
-  if (error || !data) return null;
+  const bucket = supabaseAdmin().storage.from(RESUME_BUCKET);
+  let { data, error } = await bucket.createSignedUrl(path, 60);
+
+  // Demo applications loaded with supabase/seed.sql have no file yet: create it on first view.
+  if (error || !data) {
+    const demo = demoResume(path);
+    if (!demo) return null;
+    const { error: uploadError } = await bucket.upload(path, demo, { contentType: 'application/pdf', upsert: true });
+    if (uploadError) return null;
+    ({ data, error } = await bucket.createSignedUrl(path, 60));
+    if (error || !data) return null;
+  }
   return { redirect: data.signedUrl };
 }
 
