@@ -97,9 +97,12 @@ export default function ApplyForm({ jobId }: { jobId: string }) {
         });
         if (!res.ok) return setServerError('Your resume could not be uploaded. Please try again.');
       } else {
-        const { supabaseBrowser } = await import('@/lib/supabase-browser');
+        const [{ supabaseBrowser }, { RESUME_BUCKET }] = await Promise.all([
+          import('@/lib/supabase-browser'),
+          import('@/lib/tables'),
+        ]);
         const { error: uploadError } = await supabaseBrowser()
-          .storage.from('resumes')
+          .storage.from(RESUME_BUCKET)
           .uploadToSignedUrl(start.path, start.token, file, { contentType: 'application/pdf' });
         if (uploadError) return setServerError('Your resume could not be uploaded. Please try again.');
       }

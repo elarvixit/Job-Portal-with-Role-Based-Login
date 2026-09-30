@@ -7,7 +7,8 @@ import type {
   OwnedResult,
   ResumeSource,
 } from './repo-types';
-import { RESUME_BUCKET, supabaseAdmin } from './supabase';
+import { supabaseAdmin } from './supabase';
+import { RESUME_BUCKET, TABLES } from './tables';
 import type { Application, ApplicationStatus, Job, JobStatus, JobType, PublicUser, Role, User } from './types';
 
 // Data access for Supabase. Tables use snake_case; the app uses camelCase.
@@ -93,19 +94,19 @@ function fail(context: string, error: { message: string }): never {
 /* ───────────────────────────── Users ───────────────────────────── */
 
 export async function getUserById(id: string): Promise<PublicUser | null> {
-  const { data, error } = await supabaseAdmin().from('users').select(PUBLIC_USER_COLS).eq('id', id).maybeSingle();
+  const { data, error } = await supabaseAdmin().from(TABLES.users).select(PUBLIC_USER_COLS).eq('id', id).maybeSingle();
   if (error) fail('getUserById', error);
   return data ? toPublicUser(data) : null;
 }
 
 export async function getUserByEmail(email: string): Promise<User | null> {
-  const { data, error } = await supabaseAdmin().from('users').select('*').eq('email', email).maybeSingle<UserRow>();
+  const { data, error } = await supabaseAdmin().from(TABLES.users).select('*').eq('email', email).maybeSingle<UserRow>();
   if (error) fail('getUserByEmail', error);
   return data ? toUser(data) : null;
 }
 
 export async function createUser(user: User): Promise<'ok' | 'duplicate'> {
-  const { error } = await supabaseAdmin().from('users').insert({
+  const { error } = await supabaseAdmin().from(TABLES.users).insert({
     id: user.id,
     name: user.name,
     email: user.email,
@@ -122,7 +123,7 @@ export async function createUser(user: User): Promise<'ok' | 'duplicate'> {
 
 export async function listOpenJobs(): Promise<Job[]> {
   const { data, error } = await supabaseAdmin()
-    .from('jobs')
+    .from(TABLES.jobs)
     .select('*')
     .eq('status', 'open')
     .order('created_at', { ascending: false })
@@ -133,7 +134,7 @@ export async function listOpenJobs(): Promise<Job[]> {
 
 export async function listJobsByRecruiter(recruiterId: string): Promise<Job[]> {
   const { data, error } = await supabaseAdmin()
-    .from('jobs')
+    .from(TABLES.jobs)
     .select('*')
     .eq('recruiter_id', recruiterId)
     .order('created_at', { ascending: false })
@@ -143,14 +144,14 @@ export async function listJobsByRecruiter(recruiterId: string): Promise<Job[]> {
 }
 
 export async function getJob(id: string): Promise<Job | null> {
-  const { data, error } = await supabaseAdmin().from('jobs').select('*').eq('id', id).maybeSingle<JobRow>();
+  const { data, error } = await supabaseAdmin().from(TABLES.jobs).select('*').eq('id', id).maybeSingle<JobRow>();
   if (error) fail('getJob', error);
   return data ? toJob(data) : null;
 }
 
 export async function createJob(recruiterId: string, input: JobInput): Promise<Job> {
   const { data, error } = await supabaseAdmin()
-    .from('jobs')
+    .from(TABLES.jobs)
     .insert({ id: newId('job'), recruiter_id: recruiterId, ...input })
     .select('*')
     .single<JobRow>();
@@ -169,7 +170,7 @@ export async function updateJob(id: string, recruiterId: string, input: JobInput
   const owned = await ownedJob(id, recruiterId);
   if (typeof owned === 'string') return owned;
   const { error } = await supabaseAdmin()
-    .from('jobs')
+    .from(TABLES.jobs)
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('recruiter_id', recruiterId);
@@ -181,7 +182,7 @@ export async function toggleJobStatus(id: string, recruiterId: string): Promise<
   const owned = await ownedJob(id, recruiterId);
   if (typeof owned === 'string') return owned;
   const { error } = await supabaseAdmin()
-    .from('jobs')
+    .from(TABLES.jobs)
     .update({ status: owned.status === 'open' ? 'closed' : 'open', updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('recruiter_id', recruiterId);
@@ -191,32 +192,62 @@ export async function toggleJobStatus(id: string, recruiterId: string): Promise<
 
 /* ───────────────────────── Applications ───────────────────────── */
 
+// Related rows are fetched with a second query rather than PostgREST embedding, because embedding
+// references tables by name inside the select string and the prefixed names contain spaces.
+
+async function jobsByIds(ids: string[]): Promise<Map<string, Job>> {
+  if (!ids.length) return new Map();
+  const { data, error } = await supabaseAdmin()
+    .from(TABLES.jobs)
+    .select('*')
+    .in('id', [...new Set(ids)])
+    .returns<JobRow[]>();
+  if (error) fail('jobsByIds', error);
+  return new Map(data.map((r) => [r.id, toJob(r)]));
+}
+
+async function usersByIds(ids: string[]): Promise<Map<string, PublicUser>> {
+  if (!ids.length) return new Map();
+  const { data, error } = await supabaseAdmin()
+    .from(TABLES.users)
+    .select(PUBLIC_USER_COLS)
+    .in('id', [...new Set(ids)])
+    .returns<UserRow[]>();
+  if (error) fail('usersByIds', error);
+  return new Map(data.map((r) => [r.id, toPublicUser(r)]));
+}
+
 export async function listApplicationsByCandidate(candidateId: string): Promise<ApplicationWithJob[]> {
   const { data, error } = await supabaseAdmin()
-    .from('applications')
-    .select('*, job:jobs(*)')
+    .from(TABLES.applications)
+    .select('*')
     .eq('candidate_id', candidateId)
     .order('created_at', { ascending: false })
-    .returns<(ApplicationRow & { job: JobRow | null })[]>();
+    .returns<ApplicationRow[]>();
   if (error) fail('listApplicationsByCandidate', error);
-  return data.flatMap((r) => (r.job ? [{ app: toApplication(r), job: toJob(r.job) }] : []));
+  const jobs = await jobsByIds(data.map((r) => r.job_id));
+  return data.flatMap((r) => {
+    const job = jobs.get(r.job_id);
+    return job ? [{ app: toApplication(r), job }] : [];
+  });
 }
 
 export async function listApplicationsForJobs(jobIds: string[]): Promise<ApplicationWithCandidate[]> {
   if (!jobIds.length) return [];
   const { data, error } = await supabaseAdmin()
-    .from('applications')
-    .select(`*, candidate:users(${PUBLIC_USER_COLS})`)
+    .from(TABLES.applications)
+    .select('*')
     .in('job_id', jobIds)
     .order('created_at', { ascending: false })
-    .returns<(ApplicationRow & { candidate: UserRow | null })[]>();
+    .returns<ApplicationRow[]>();
   if (error) fail('listApplicationsForJobs', error);
-  return data.map((r) => ({ app: toApplication(r), candidate: r.candidate ? toPublicUser(r.candidate) : null }));
+  const users = await usersByIds(data.map((r) => r.candidate_id));
+  return data.map((r) => ({ app: toApplication(r), candidate: users.get(r.candidate_id) ?? null }));
 }
 
 export async function countApplicationsForJob(jobId: string): Promise<number> {
   const { count, error } = await supabaseAdmin()
-    .from('applications')
+    .from(TABLES.applications)
     .select('id', { count: 'exact', head: true })
     .eq('job_id', jobId);
   if (error) fail('countApplicationsForJob', error);
@@ -225,7 +256,7 @@ export async function countApplicationsForJob(jobId: string): Promise<number> {
 
 export async function findApplication(jobId: string, candidateId: string): Promise<Application | null> {
   const { data, error } = await supabaseAdmin()
-    .from('applications')
+    .from(TABLES.applications)
     .select('*')
     .eq('job_id', jobId)
     .eq('candidate_id', candidateId)
@@ -239,16 +270,18 @@ export async function getApplicationWithOwner(
   id: string,
 ): Promise<{ app: Application; recruiterId: string | null } | null> {
   const { data, error } = await supabaseAdmin()
-    .from('applications')
-    .select('*, job:jobs(recruiter_id)')
+    .from(TABLES.applications)
+    .select('*')
     .eq('id', id)
-    .maybeSingle<ApplicationRow & { job: { recruiter_id: string } | null }>();
+    .maybeSingle<ApplicationRow>();
   if (error) fail('getApplicationWithOwner', error);
-  return data ? { app: toApplication(data), recruiterId: data.job?.recruiter_id ?? null } : null;
+  if (!data) return null;
+  const job = await getJob(data.job_id);
+  return { app: toApplication(data), recruiterId: job?.recruiterId ?? null };
 }
 
 export async function createApplication(app: Application): Promise<'ok' | 'duplicate'> {
-  const { error } = await supabaseAdmin().from('applications').insert({
+  const { error } = await supabaseAdmin().from(TABLES.applications).insert({
     id: app.id,
     job_id: app.jobId,
     candidate_id: app.candidateId,
@@ -271,7 +304,7 @@ export async function updateApplicationStatus(
   if (!found) return 'missing';
   if (found.recruiterId !== recruiterId) return 'forbidden';
   const { error } = await supabaseAdmin()
-    .from('applications')
+    .from(TABLES.applications)
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) fail('updateApplicationStatus', error);

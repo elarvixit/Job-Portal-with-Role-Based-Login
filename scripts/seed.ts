@@ -4,6 +4,7 @@
 // Reads NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from .env.local (or the environment).
 import { createClient } from '@supabase/supabase-js';
 import { buildSeed } from '../lib/seed';
+import { RESUME_BUCKET, TABLES } from '../lib/tables';
 
 try {
   process.loadEnvFile('.env.local');
@@ -19,7 +20,7 @@ if (!url || !key) {
 }
 
 const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-const BUCKET = 'resumes';
+const BUCKET = RESUME_BUCKET;
 const reset = process.argv.includes('--reset');
 
 function check(label: string, error: { message: string } | null) {
@@ -43,7 +44,7 @@ async function emptyBucket() {
 }
 
 async function main() {
-  const { count, error } = await supabase.from('users').select('id', { count: 'exact', head: true });
+  const { count, error } = await supabase.from(TABLES.users).select('id', { count: 'exact', head: true });
   check('read users', error);
 
   if (count && !reset) {
@@ -54,7 +55,7 @@ async function main() {
   if (reset) {
     console.log('Resetting: deleting all data…');
     // Deleting users cascades to their jobs and applications.
-    check('delete users', (await supabase.from('users').delete().neq('id', '')).error);
+    check('delete users', (await supabase.from(TABLES.users).delete().neq('id', '')).error);
     await emptyBucket();
   }
 
@@ -63,7 +64,7 @@ async function main() {
   check(
     'insert users',
     (
-      await supabase.from('users').insert(
+      await supabase.from(TABLES.users).insert(
         users.map((u) => ({
           id: u.id,
           name: u.name,
@@ -79,7 +80,7 @@ async function main() {
   check(
     'insert jobs',
     (
-      await supabase.from('jobs').insert(
+      await supabase.from(TABLES.jobs).insert(
         jobs.map((j) => ({
           id: j.id,
           recruiter_id: j.recruiterId,
@@ -107,7 +108,7 @@ async function main() {
   check(
     'insert applications',
     (
-      await supabase.from('applications').insert(
+      await supabase.from(TABLES.applications).insert(
         applications.map((a) => ({
           id: a.id,
           job_id: a.jobId,

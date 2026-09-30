@@ -1,7 +1,7 @@
 import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-export const RESUME_BUCKET = 'resumes';
+export { RESUME_BUCKET } from './tables';
 
 let client: SupabaseClient | undefined;
 

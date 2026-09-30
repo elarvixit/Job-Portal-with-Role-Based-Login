@@ -26,8 +26,20 @@ Once the Supabase variables below are set, the app uses Supabase automatically (
 
 1. Create a free project at [supabase.com](https://supabase.com/dashboard).
 2. Open **SQL Editor → New query**, paste the contents of [`supabase/schema.sql`](supabase/schema.sql) and click **Run**.
-   This creates the `users`, `jobs` and `applications` tables and the private `resumes` bucket (PDF only, 5 MB max).
-3. Open **Project Settings → API Keys** and copy the project URL, the public (anon / publishable) key and the
+   It creates these tables and a private resume bucket (PDF only, 5 MB max):
+
+   | Object  | Name |
+   | ------- | ---- |
+   | Table   | `Bhargavi_Job Portal with role-based login_users` |
+   | Table   | `Bhargavi_Job Portal with role-based login_jobs` |
+   | Table   | `Bhargavi_Job Portal with role-based login_applications` |
+   | Bucket  | `bhargavi-job-portal-resumes` |
+
+   The names contain spaces, so wrap them in double quotes in SQL:
+   `select * from "Bhargavi_Job Portal with role-based login_jobs";`. They are defined once in
+   [`lib/tables.ts`](lib/tables.ts) and must match the SQL.
+3. *(Optional)* Run [`supabase/seed.sql`](supabase/seed.sql) the same way to add demo users and jobs.
+4. Open **Project Settings → API Keys** and copy the project URL, the public (anon / publishable) key and the
    secret (service_role / secret) key.
 
 ### 2. Configure environment variables
@@ -49,8 +61,9 @@ npm run db:seed
 npm run dev
 ```
 
-Open http://localhost:3000. `npm run db:seed` loads the demo data if the database is empty;
-`npm run db:reset` **deletes everything** and re-seeds.
+Open http://localhost:3000. `npm run db:seed` loads the full demo data (including sample applications with
+resumes) if the database is empty; `npm run db:reset` **deletes everything** and re-seeds. After editing
+`lib/seed.ts`, run `npm run db:seed-sql` to regenerate `supabase/seed.sql`.
 
 ### Demo accounts
 
@@ -66,8 +79,9 @@ All demo accounts use the password `password123`.
 ## Deploying to Vercel
 
 1. Import this GitHub repo at [vercel.com/new](https://vercel.com/new) (framework: Next.js, no build settings needed).
-2. Add the four environment variables above under **Settings → Environment Variables**.
-3. Deploy. Every push to `main` redeploys automatically.
+2. Add the four environment variables above under **Settings → Environment Variables** (all environments).
+3. Redeploy. `NEXT_PUBLIC_*` values are built into the site, so changing them always needs a redeploy.
+   Every push to `main` redeploys automatically.
 
 ## Routes
 
@@ -93,7 +107,7 @@ All demo accounts use the password `password123`.
   on every table with no policies, so the public anon key cannot read or write any data.
 - **Resumes** — to stay under Vercel's 4.5 MB request limit, the browser uploads the PDF directly to Storage:
   1. `POST /api/applications/upload-url` checks the candidate may apply and returns a one-time signed upload URL.
-  2. The browser uploads the file to the private `resumes` bucket (the bucket itself enforces PDF + 5 MB).
+  2. The browser uploads the file to the private `bhargavi-job-portal-resumes` bucket (the bucket itself enforces PDF + 5 MB).
   3. `POST /api/applications` downloads and verifies the file (size and `%PDF-` signature), then saves the application.
 
   `GET /api/resumes/[id]` lets only the applicant or the job's recruiter open a resume, via a 60-second signed link.
