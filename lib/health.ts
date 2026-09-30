@@ -37,10 +37,16 @@ function explain(what: string, error: { message?: string; code?: string }): stri
   return `${what}: ${msg}`;
 }
 
-/** Problems found (empty when Supabase is ready). */
-export async function supabaseHealth(): Promise<string[]> {
-  if (healthy) return [];
+export type Health = { stage: 'settings' | 'database'; problems: string[] };
+
+/**
+ * Problems found (empty when Supabase is ready). A wrong key or unreachable project is a
+ * "settings" problem (fix in Vercel + redeploy); missing tables or bucket is a "database" problem.
+ */
+export async function supabaseHealth(): Promise<Health> {
+  if (healthy) return { stage: 'database', problems: [] };
   const problems: string[] = [];
+  const settings = (p: string) => ({ stage: 'settings' as const, problems: [p] });
 
   try {
     const db = supabaseAdmin();
@@ -49,17 +55,17 @@ export async function supabaseHealth(): Promise<string[]> {
       const { error } = await db.from(table).select('id').limit(1);
       if (error) {
         const p = explain(`Table "${table}"`, error);
-        problems.push(p);
         // A bad key or unreachable project affects every table; one message is enough.
-        if (!p.startsWith('Table')) return problems;
+        if (!p.startsWith('Table')) return settings(p);
+        problems.push(p);
       }
     }
     const { error: bucketError } = await db.storage.getBucket(RESUME_BUCKET);
     if (bucketError) problems.push(explain(`Storage bucket "${RESUME_BUCKET}"`, { message: /not found/i.test(bucketError.message) ? 'does not exist' : bucketError.message }));
   } catch (e) {
-    problems.push(explain('Supabase', { message: e instanceof Error ? e.message : String(e) }));
+    return settings(explain('Supabase', { message: e instanceof Error ? e.message : String(e) }));
   }
 
   if (!problems.length) healthy = true;
-  return problems;
+  return { stage: 'database', problems };
 }

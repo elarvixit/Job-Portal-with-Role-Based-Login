@@ -26,16 +26,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Vercel can't keep local files, so until the settings are right show setup steps instead of erroring.
   const settingsProblems = process.env.VERCEL ? configProblems() : [];
   // With Supabase connected, make sure the tables and bucket from schema.sql exist.
-  const databaseProblems =
-    !settingsProblems.length && storageMode === 'supabase' ? await supabaseHealth() : [];
+  const health =
+    !settingsProblems.length && storageMode === 'supabase'
+      ? await supabaseHealth()
+      : { stage: 'settings' as const, problems: settingsProblems };
 
-  if (settingsProblems.length || databaseProblems.length) {
+  if (health.problems.length) {
     return (
       <html lang="en" className={`${jakarta.variable} ${serif.variable}`}>
         <body>
           <SetupRequired
-            stage={settingsProblems.length ? 'settings' : 'database'}
-            problems={settingsProblems.length ? settingsProblems : databaseProblems}
+            stage={health.stage}
+            problems={health.problems}
             environment={process.env.VERCEL_ENV ?? 'development'}
             seenNames={Object.keys(process.env)
               .filter((n) => /SUPABASE|SESSION/i.test(n))

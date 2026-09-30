@@ -46,6 +46,15 @@ export function keyKind(key: string): 'secret' | 'public' | 'unknown' {
   return 'unknown';
 }
 
+/** Example values from the setup instructions and .env.example, pasted by mistake. */
+function isPlaceholder(value: string): boolean {
+  return (
+    /^https:\/\/(abcdefghijkl|abcdefgh|abcd|xxxxxxxx|your-project(-id)?)\.supabase\.co\/?$/i.test(value) ||
+    /paste|your[-_ ]?(anon|secret|service|key)|<.*>|^x{6,}$/i.test(value) ||
+    value.length < 20
+  );
+}
+
 /** Human-readable configuration problems (names and hints only, never values). Empty when all is well. */
 export function configProblems(): string[] {
   const problems: string[] = [];
@@ -55,11 +64,18 @@ export function configProblems(): string[] {
 
   if (!url) problems.push('NEXT_PUBLIC_SUPABASE_URL is missing.');
   else if (!/^https:\/\/[^/\s]+$/.test(url.replace(/\/$/, ''))) {
-    problems.push('NEXT_PUBLIC_SUPABASE_URL should look like https://abcdefgh.supabase.co (nothing after .co).');
+    problems.push('NEXT_PUBLIC_SUPABASE_URL should look like https://<your-project-id>.supabase.co (nothing after .co).');
+  } else if (isPlaceholder(url)) {
+    problems.push(
+      'NEXT_PUBLIC_SUPABASE_URL is still the example value from the instructions. Replace it with your own ' +
+        'Project URL from Supabase → Project Settings → Data API.',
+    );
   }
 
   if (!anon) problems.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is missing.');
-  else if (keyKind(anon) === 'secret') {
+  else if (isPlaceholder(anon)) {
+    problems.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is still an example value. Paste your real anon / publishable key.');
+  } else if (keyKind(anon) === 'secret') {
     problems.push(
       'NEXT_PUBLIC_SUPABASE_ANON_KEY contains a SECRET key. Use the anon / publishable key here — and rotate the ' +
         'secret key in Supabase, because NEXT_PUBLIC values are sent to browsers.',
@@ -67,7 +83,9 @@ export function configProblems(): string[] {
   }
 
   if (!service) problems.push('SUPABASE_SERVICE_ROLE_KEY is missing.');
-  else if (keyKind(service) === 'public') {
+  else if (isPlaceholder(service)) {
+    problems.push('SUPABASE_SERVICE_ROLE_KEY is still an example value. Paste your real service_role / secret key.');
+  } else if (keyKind(service) === 'public') {
     problems.push('SUPABASE_SERVICE_ROLE_KEY contains the public anon key. Use the service_role / secret key here.');
   }
 
