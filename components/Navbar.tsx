@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { logoutAction } from '@/app/actions';
 import { initials } from '@/lib/format';
 import type { Role } from '@/lib/types';
+import ThemeToggle from './ThemeToggle';
 import { LogoutIcon, MenuIcon, XIcon } from './icons';
 
 interface NavUser {
@@ -33,14 +34,15 @@ export default function Navbar({ user }: { user: NavUser | null }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [pastHero, setPastHero] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const onDark = pathname === '/' && !pastHero;
 
   useEffect(() => setOpen(false), [pathname]);
 
   useEffect(() => {
-    if (pathname !== '/') return;
     const onScroll = () => {
-      const hero = document.querySelector('.hero');
+      setScrolled(window.scrollY > 8);
+      const hero = pathname === '/' ? document.querySelector('.hero') : null;
       setPastHero(hero ? hero.getBoundingClientRect().bottom < 68 : false);
     };
     onScroll();
@@ -52,7 +54,7 @@ export default function Navbar({ user }: { user: NavUser | null }) {
   const home = user ? (user.role === 'candidate' ? '/candidate' : '/recruiter') : '/';
 
   return (
-    <header className={`nav${onDark ? ' on-dark' : ''}`}>
+    <header className={`nav${onDark ? ' on-dark' : ''}${scrolled ? ' scrolled' : ''}`}>
       <div className="container nav-inner">
         <Link href={user ? home : '/'} className="brand" aria-label="Hireloom home">
           <span className="brand-mark">
@@ -78,6 +80,8 @@ export default function Navbar({ user }: { user: NavUser | null }) {
               {l.label}
             </Link>
           ))}
+
+          <ThemeToggle />
 
           {user ? (
             <>

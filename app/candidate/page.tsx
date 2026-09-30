@@ -4,7 +4,7 @@ import { requireRole } from '@/lib/auth';
 import { listApplicationsByCandidate, listOpenJobs } from '@/lib/repo';
 import type { Job } from '@/lib/types';
 import ApplicationsTable, { type Row } from '@/components/ApplicationsTable';
-import { EmptyState, JobCard } from '@/components/ui';
+import { CountUp, EmptyState, JobCard, STATUS_HELP, StatusBadge } from '@/components/ui';
 import { ArrowRight, ClockIcon, CompassIcon, InboxIcon, StarIcon } from '@/components/icons';
 
 export const metadata: Metadata = { title: 'Dashboard' };
@@ -44,7 +44,9 @@ export default async function CandidateDashboard() {
               <InboxIcon size={18} />
             </span>
           </div>
-          <div className="v">{rows.length}</div>
+          <div className="v">
+            <CountUp value={rows.length} />
+          </div>
           <div className="foot">Across {new Set(rows.map((r) => r.job.company)).size} companies</div>
         </div>
         <div className="stat">
@@ -54,7 +56,9 @@ export default async function CandidateDashboard() {
               <ClockIcon size={18} />
             </span>
           </div>
-          <div className="v">{inReview}</div>
+          <div className="v">
+            <CountUp value={inReview} />
+          </div>
           <div className="foot">Recruiters are looking</div>
         </div>
         <div className="stat">
@@ -64,7 +68,9 @@ export default async function CandidateDashboard() {
               <StarIcon size={18} />
             </span>
           </div>
-          <div className="v">{shortlisted}</div>
+          <div className="v">
+            <CountUp value={shortlisted} />
+          </div>
           <div className="foot">Nice work — keep going</div>
         </div>
       </div>
@@ -97,6 +103,26 @@ export default async function CandidateDashboard() {
         )}
       </div>
 
+      <section className="card guide" data-reveal aria-labelledby="status-guide">
+        <div className="card-head">
+          <h2 id="status-guide">What your application status means</h2>
+          <span className="muted" style={{ fontSize: 13 }}>
+            Recruiters update this — you’ll see changes here and in My Applications.
+          </span>
+        </div>
+        <div className="guide-grid">
+          {(['applied', 'reviewing', 'shortlisted', 'hired', 'rejected'] as const).map((s, i) => (
+            <div key={s} className="guide-card">
+              <span className="n">{s === 'rejected' ? 'OR' : `STEP ${i + 1}`}</span>
+              <strong>
+                <StatusBadge status={s} />
+              </strong>
+              <p>{STATUS_HELP[s]}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {suggestions.length > 0 && (
         <section style={{ marginTop: 40 }}>
           <div className="section-head">
@@ -109,8 +135,8 @@ export default async function CandidateDashboard() {
             </Link>
           </div>
           <div className="job-grid">
-            {suggestions.map((j) => (
-              <JobCard key={j.id} job={j} />
+            {suggestions.map((j, i) => (
+              <JobCard key={j.id} job={j} index={i} />
             ))}
           </div>
         </section>

@@ -11,7 +11,7 @@ const ROLES = [
   { value: 'recruiter', title: 'Recruiter', text: 'Post jobs and manage your applicants.', Icon: BriefcaseIcon },
 ] as const;
 
-export default function SignupForm() {
+export default function SignupForm({ defaultRole = 'candidate' }: { defaultRole?: 'candidate' | 'recruiter' }) {
   const [state, action, pending] = useActionState<FormState, FormData>(signupAction, {});
   const fe = state.fieldErrors ?? {};
   const v = state.values ?? {};
@@ -31,7 +31,7 @@ export default function SignupForm() {
         <div className="role-options">
           {ROLES.map(({ value, title, text, Icon }) => (
             <label key={value} className="role-option">
-              <input type="radio" name="role" value={value} defaultChecked={(v.role || 'candidate') === value} />
+              <input type="radio" name="role" value={value} defaultChecked={(v.role || defaultRole) === value} />
               <span className="card">
                 <span className="ico">
                   <Icon size={18} />

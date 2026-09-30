@@ -172,3 +172,25 @@ export const CompassIcon = (p: P) => (
     <path d="m16 8-2 6-6 2 2-6 6-2Z" />
   </svg>
 );
+export const SunIcon = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+  </svg>
+);
+export const MoonIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+  </svg>
+);
+export const MonitorIcon = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="2" y="4" width="20" height="13" rx="2" />
+    <path d="M8 21h8M12 17v4" />
+  </svg>
+);
+export const BulbIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z" />
+  </svg>
+);

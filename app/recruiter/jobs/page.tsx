@@ -7,7 +7,7 @@ import { toggleJobStatusAction } from '@/app/actions';
 import { CompanyLogo, EmptyState, StatusBadge } from '@/components/ui';
 import SubmitButton from '@/components/SubmitButton';
 import Toast from '@/components/Toast';
-import { BriefcaseIcon, EditIcon, PlusIcon, PowerIcon, UsersIcon } from '@/components/icons';
+import { BriefcaseIcon, BulbIcon, EditIcon, PlusIcon, PowerIcon, UsersIcon } from '@/components/icons';
 
 export const metadata: Metadata = { title: 'My Jobs' };
 
@@ -41,6 +41,17 @@ export default async function MyJobsPage({ searchParams }: { searchParams: Promi
           <PlusIcon size={17} /> Post a job
         </Link>
       </div>
+
+      {jobs.length > 0 && (
+        <p className="hint">
+          <BulbIcon size={17} />
+          <span>
+            <strong>View applicants</strong> shows who applied to each job. <strong>Close</strong> hides a job from the
+            job board and stops new applications — you keep the applicants, and you can <strong>Reopen</strong> it any
+            time.
+          </span>
+        </p>
+      )}
 
       {jobs.length ? (
         <div className="card table-card">

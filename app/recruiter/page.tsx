@@ -3,8 +3,8 @@ import Link from 'next/link';
 import { requireRole } from '@/lib/auth';
 import { listApplicationsForJobs, listJobsByRecruiter } from '@/lib/repo';
 import { initials, timeAgo } from '@/lib/format';
-import { EmptyState, StatusBadge } from '@/components/ui';
-import { BriefcaseIcon, EditIcon, InboxIcon, PlusIcon, StarIcon, UsersIcon } from '@/components/icons';
+import { CountUp, EmptyState, StatusBadge } from '@/components/ui';
+import { BriefcaseIcon, EditIcon, EyeIcon, FileIcon, InboxIcon, PlusIcon, StarIcon, UsersIcon } from '@/components/icons';
 
 export const metadata: Metadata = { title: 'Recruiter dashboard' };
 
@@ -47,7 +47,9 @@ export default async function RecruiterDashboard() {
               <BriefcaseIcon size={18} />
             </span>
           </div>
-          <div className="v">{openJobs}</div>
+          <div className="v">
+            <CountUp value={openJobs} />
+          </div>
           <div className="foot">
             {myJobs.length - openJobs} closed · {myJobs.length} total
           </div>
@@ -59,7 +61,9 @@ export default async function RecruiterDashboard() {
               <UsersIcon size={18} />
             </span>
           </div>
-          <div className="v">{apps.length}</div>
+          <div className="v">
+            <CountUp value={apps.length} />
+          </div>
           <div className="foot">+{newThisWeek} in the last 7 days</div>
         </div>
         <div className="stat">
@@ -69,7 +73,9 @@ export default async function RecruiterDashboard() {
               <StarIcon size={18} />
             </span>
           </div>
-          <div className="v">{shortlisted}</div>
+          <div className="v">
+            <CountUp value={shortlisted} />
+          </div>
           <div className="foot">
             {apps.length ? Math.round((shortlisted / apps.length) * 100) : 0}% of all applicants
           </div>
@@ -143,6 +149,45 @@ export default async function RecruiterDashboard() {
           </div>
         </div>
       </div>
+
+      <section className="card guide" data-reveal aria-labelledby="workflow">
+        <div className="card-head">
+          <h2 id="workflow">How hiring works on Hireloom</h2>
+          <span className="muted" style={{ fontSize: 13 }}>
+            Four steps from posting a job to making a hire.
+          </span>
+        </div>
+        <div className="guide-grid">
+          <Link href="/recruiter/jobs/new" className="guide-card">
+            <span className="n">STEP 1</span>
+            <strong>
+              <PlusIcon size={16} /> Post a job
+            </strong>
+            <p>Add the details and publish. The job appears on the job board right away.</p>
+          </Link>
+          <Link href="/recruiter/jobs" className="guide-card">
+            <span className="n">STEP 2</span>
+            <strong>
+              <UsersIcon size={16} /> Open “View applicants”
+            </strong>
+            <p>From My Jobs, see everyone who applied, with the date and their cover note.</p>
+          </Link>
+          <div className="guide-card">
+            <span className="n">STEP 3</span>
+            <strong>
+              <FileIcon size={16} /> Read the resume
+            </strong>
+            <p>“View resume” opens the candidate’s PDF in a new tab. Only you can see it.</p>
+          </div>
+          <div className="guide-card">
+            <span className="n">STEP 4</span>
+            <strong>
+              <EyeIcon size={16} /> Set the status
+            </strong>
+            <p>Pick In review, Shortlisted, Hired or Rejected. The candidate sees it instantly.</p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import Link from 'next/link';
+import { getCurrentUser } from '@/lib/auth';
 import { listOpenJobs } from '@/lib/repo';
 import { JOB_TYPES } from '@/lib/types';
-import { EmptyState, JobCard } from '@/components/ui';
-import { BriefcaseIcon, PinIcon, SearchIcon } from '@/components/icons';
+import HowItWorks from '@/components/HowItWorks';
+import { CountUp, EmptyState, JobCard } from '@/components/ui';
+import { BriefcaseIcon, CheckIcon, PinIcon, SearchIcon, StarIcon } from '@/components/icons';
 
 type SP = { q?: string; location?: string; type?: string };
 
@@ -20,7 +22,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const location = sp.location ?? '';
   const type = sp.type ?? '';
 
-  const openJobs = await listOpenJobs();
+  const [openJobs, user] = await Promise.all([listOpenJobs(), getCurrentUser()]);
   const locations = [...new Set(openJobs.map((j) => j.location))].sort((a, b) =>
     a === 'Remote' ? -1 : b === 'Remote' ? 1 : a.localeCompare(b),
   );
@@ -39,7 +41,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   return (
     <>
       <section className="hero">
-        <div className="container">
+        <span className="hero-orb o1" aria-hidden />
+        <span className="hero-orb o2" aria-hidden />
+        <span className="hero-orb o3" aria-hidden />
+        <div className="container hero-grid">
+          <HeroVisual />
+          <div className="hero-copy">
           <div className="hero-eyebrow fade-up">
             <span className="pulse" /> {openJobs.length} open roles hiring now
           </div>
@@ -87,14 +94,24 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
           <div className="hero-stats fade-up">
             <div>
-              <strong>{openJobs.length}</strong>open positions
+              <strong>
+                <CountUp value={openJobs.length} />
+              </strong>
+              open positions
             </div>
             <div>
-              <strong>{companies}</strong>hiring companies
+              <strong>
+                <CountUp value={companies} />
+              </strong>
+              hiring companies
             </div>
             <div>
-              <strong>{locations.length}</strong>locations
+              <strong>
+                <CountUp value={locations.length} />
+              </strong>
+              locations
             </div>
+          </div>
           </div>
         </div>
       </section>
@@ -139,8 +156,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
           {jobs.length ? (
             <div className="job-grid">
-              {jobs.map((job) => (
-                <JobCard key={job.id} job={job} />
+              {jobs.map((job, i) => (
+                <JobCard key={job.id} job={job} index={i} />
               ))}
             </div>
           ) : (
@@ -158,6 +175,57 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           )}
         </div>
       </section>
+
+      <HowItWorks role={user?.role ?? null} />
     </>
+  );
+}
+
+/** Floating cards in the hero that tell the story from both sides (desktop only). */
+function HeroVisual() {
+  return (
+    <div className="hero-visual" aria-hidden>
+      <div className="float-card c1">
+        <div className="role-tag">Candidate applies</div>
+        <div className="row">
+          <span className="mini-pdf">PDF</span>
+          <div>
+            <div className="who">Priya_Sharma_CV.pdf</div>
+            <div className="what">Senior Frontend Engineer</div>
+          </div>
+          <span className="tag" style={{ background: 'rgba(106,174,255,.18)', color: '#9fcbff' }}>
+            Sent
+          </span>
+        </div>
+      </div>
+      <div className="float-card c2">
+        <div className="role-tag">Recruiter reviews</div>
+        <div className="row">
+          <span className="avatar">PS</span>
+          <div>
+            <div className="who">New applicant</div>
+            <div className="what">Opened resume · 2 min ago</div>
+          </div>
+          <span className="tag" style={{ background: 'rgba(247,192,74,.18)', color: '#ffd98a' }}>
+            In review
+          </span>
+        </div>
+      </div>
+      <div className="float-card c3">
+        <div className="role-tag">Candidate sees it instantly</div>
+        <div className="row">
+          <span className="avatar" style={{ background: 'linear-gradient(135deg,#3ddc9d,#1fb4aa)' }}>
+            <StarIcon size={14} />
+          </span>
+          <div>
+            <div className="who">You’re shortlisted!</div>
+            <div className="what">Northwind Labs</div>
+          </div>
+          <span className="tag" style={{ background: 'rgba(61,220,157,.18)', color: '#7ef0c1' }}>
+            <CheckIcon size={11} strokeWidth={3} />
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -7,7 +7,7 @@ import { formatDate, initials, timeAgo } from '@/lib/format';
 import { APPLICATION_STATUSES, type ApplicationStatus } from '@/lib/types';
 import StatusSelect from '@/components/StatusSelect';
 import { EmptyState, StatusBadge, statusLabel } from '@/components/ui';
-import { ArrowLeft, EditIcon, FileIcon, InboxIcon } from '@/components/icons';
+import { ArrowLeft, BulbIcon, EditIcon, FileIcon, InboxIcon } from '@/components/icons';
 
 export const metadata: Metadata = { title: 'Applicants' };
 
@@ -51,6 +51,17 @@ export default async function ApplicantsPage({
           </Link>
         </div>
       </div>
+
+      {all.length > 0 && (
+        <p className="hint">
+          <BulbIcon size={17} />
+          <span>
+            Click <strong>View resume</strong> to open a candidate’s PDF, and click the cover note to read all of it.
+            Then change the <strong>Status</strong> — it saves instantly and the candidate sees it in their{' '}
+            <em>My Applications</em> page.
+          </span>
+        </p>
+      )}
 
       <div className="card table-card">
         {all.length > 0 && (

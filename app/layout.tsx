@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Instrument_Serif, Plus_Jakarta_Sans } from 'next/font/google';
+import MotionEffects from '@/components/MotionEffects';
 import Navbar from '@/components/Navbar';
+import { themeInitScript } from '@/lib/theme';
 import SetupRequired from '@/components/SetupRequired';
 import { getCurrentUser } from '@/lib/auth';
 import { supabaseHealth } from '@/lib/health';
@@ -33,7 +35,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   if (health.problems.length) {
     return (
-      <html lang="en" className={`${jakarta.variable} ${serif.variable}`}>
+      <html lang="en" className={`${jakarta.variable} ${serif.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
         <body>
           <SetupRequired
             stage={health.stage}
@@ -51,8 +56,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const user = await getCurrentUser();
 
   return (
-    <html lang="en" className={`${jakarta.variable} ${serif.variable}`}>
+    <html lang="en" className={`${jakarta.variable} ${serif.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body>
+        <MotionEffects />
         <Navbar user={user ? { name: user.name, role: user.role } : null} />
         <main>{children}</main>
         <footer className="footer">

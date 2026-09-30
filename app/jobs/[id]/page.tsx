@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { formatDate, timeAgo } from '@/lib/format';
 import ApplyForm from '@/components/ApplyForm';
 import { CompanyLogo, StatusBadge, statusLabel } from '@/components/ui';
-import { ArrowLeft, BriefcaseIcon, CheckIcon, LockIcon, ShieldIcon, UsersIcon } from '@/components/icons';
+import { ArrowLeft, BriefcaseIcon, BulbIcon, CheckIcon, LockIcon, ShieldIcon, UsersIcon } from '@/components/icons';
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -108,8 +108,18 @@ export default async function JobDetailsPage({ params }: Props) {
     panel = (
       <div className="card-pad">
         <h2>Apply for this role</h2>
-        <p className="muted" style={{ fontSize: 14, margin: '6px 0 22px' }}>
+        <p className="muted" style={{ fontSize: 14, margin: '6px 0 16px' }}>
           Applying as <strong style={{ color: 'var(--ink)' }}>{user.name}</strong>
+        </p>
+        <p className="hint" style={{ fontSize: 13 }}>
+          <BulbIcon size={16} />
+          <span>
+            The recruiter sees your cover note and resume. Follow your progress any time in{' '}
+            <Link href="/candidate/applications" className="link">
+              My Applications
+            </Link>
+            .
+          </span>
         </p>
         <ApplyForm jobId={job.id} />
       </div>

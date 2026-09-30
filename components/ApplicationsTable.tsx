@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { formatDate } from '@/lib/format';
 import type { Application, Job } from '@/lib/types';
-import { CompanyLogo, StatusBadge } from './ui';
+import { CompanyLogo, StatusBadge, StatusTracker } from './ui';
 import { FileIcon } from './icons';
 
 export type Row = { app: Application; job: Job };
@@ -15,6 +15,7 @@ export default function ApplicationsTable({ rows }: { rows: Row[] }) {
             <th>Job title</th>
             <th>Date applied</th>
             <th>Status</th>
+            <th>Progress</th>
             <th style={{ textAlign: 'right' }}>Resume</th>
           </tr>
         </thead>
@@ -39,6 +40,9 @@ export default function ApplicationsTable({ rows }: { rows: Row[] }) {
               </td>
               <td>
                 <StatusBadge status={app.status} />
+              </td>
+              <td>
+                <StatusTracker status={app.status} />
               </td>
               <td>
                 <div className="actions">
