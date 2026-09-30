@@ -4,6 +4,7 @@ import Navbar from '@/components/Navbar';
 import SetupRequired from '@/components/SetupRequired';
 import { getCurrentUser } from '@/lib/auth';
 import { storageMode } from '@/lib/repo';
+import { missingEnvVars } from '@/lib/supabase';
 import './globals.css';
 
 const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta', display: 'swap' });
@@ -21,12 +22,13 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // Vercel can't keep local files, so without Supabase show setup steps instead of erroring.
-  if (storageMode === 'local' && process.env.VERCEL) {
+  // Vercel can't keep local files, so until every setting is present show setup steps instead of erroring.
+  const missing = process.env.VERCEL ? missingEnvVars() : [];
+  if (missing.length) {
     return (
       <html lang="en" className={`${jakarta.variable} ${serif.variable}`}>
         <body>
-          <SetupRequired />
+          <SetupRequired missing={missing} />
         </body>
       </html>
     );
