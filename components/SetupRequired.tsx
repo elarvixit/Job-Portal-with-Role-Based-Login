@@ -1,14 +1,31 @@
-/** Shown on Vercel until the Supabase settings are correct (local mode can't run there). */
+/**
+ * Setup guidance instead of an "Application error":
+ *  - settings: Vercel variables missing or wrong (local mode can't run there)
+ *  - database: Supabase is connected but its tables/bucket aren't ready
+ */
 export default function SetupRequired({
+  stage,
   problems,
   environment,
   seenNames,
 }: {
+  stage: 'settings' | 'database';
   problems: string[];
   environment: string;
   seenNames: string[];
 }) {
-  const steps = [
+  const databaseSteps = [
+    <>
+      In the Supabase project named above, open <strong>SQL Editor → New query</strong>, paste the whole of{' '}
+      <code>supabase/schema.sql</code> and click <strong>Run</strong> (optionally also <code>supabase/seed.sql</code>{' '}
+      for demo data).
+    </>,
+    <>
+      Reload this page. No redeploy is needed — the site checks again on every visit until it works.
+    </>,
+  ];
+
+  const settingsSteps = [
     <>
       In Supabase, open <strong>SQL Editor</strong>, paste the contents of <code>supabase/schema.sql</code> and click{' '}
       <strong>Run</strong> (optionally also <code>supabase/seed.sql</code> for demo data).
@@ -38,9 +55,17 @@ export default function SetupRequired({
         >
           Hireloom · Setup required
         </div>
-        <h1 style={{ fontSize: 28, margin: '10px 0 8px' }}>Connect Supabase to start</h1>
+        <h1 style={{ fontSize: 28, margin: '10px 0 8px' }}>
+          {stage === 'settings' ? 'Connect Supabase to start' : 'Supabase is connected — one step left'}
+        </h1>
         <p className="muted" style={{ margin: '0 0 18px', maxWidth: 'none' }}>
-          The site is running, but this <strong>{environment}</strong> deployment has a problem with its settings.
+          {stage === 'settings' ? (
+            <>
+              The site is running, but this <strong>{environment}</strong> deployment has a problem with its settings.
+            </>
+          ) : (
+            <>The settings are correct and Supabase answered, but the database isn’t ready yet.</>
+          )}
         </p>
 
         <div className="alert alert-error" style={{ display: 'block', marginBottom: 14 }}>
@@ -52,6 +77,7 @@ export default function SetupRequired({
           </ul>
         </div>
 
+        {stage === 'settings' && (
         <div className="alert alert-info" style={{ display: 'block', marginBottom: 22, fontWeight: 400 }}>
           <strong>Supabase-related variable names this deployment can see:</strong>{' '}
           {seenNames.length ? (
@@ -69,9 +95,10 @@ export default function SetupRequired({
             <strong>{environment}</strong> environment.
           </div>
         </div>
+        )}
 
         <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 12, color: 'var(--ink-2)' }}>
-          {steps.map((s, i) => (
+          {(stage === 'settings' ? settingsSteps : databaseSteps).map((s, i) => (
             <li key={i}>{s}</li>
           ))}
         </ol>

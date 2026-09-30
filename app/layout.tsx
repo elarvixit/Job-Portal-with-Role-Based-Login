@@ -3,6 +3,7 @@ import { Instrument_Serif, Plus_Jakarta_Sans } from 'next/font/google';
 import Navbar from '@/components/Navbar';
 import SetupRequired from '@/components/SetupRequired';
 import { getCurrentUser } from '@/lib/auth';
+import { supabaseHealth } from '@/lib/health';
 import { storageMode } from '@/lib/repo';
 import { configProblems } from '@/lib/supabase';
 import './globals.css';
@@ -22,15 +23,20 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // Vercel can't keep local files, so until every setting is present show setup steps instead of erroring.
-  const problems = process.env.VERCEL ? configProblems() : [];
-  if (problems.length) {
+  // Vercel can't keep local files, so until the settings are right show setup steps instead of erroring.
+  const settingsProblems = process.env.VERCEL ? configProblems() : [];
+  // With Supabase connected, make sure the tables and bucket from schema.sql exist.
+  const databaseProblems =
+    !settingsProblems.length && storageMode === 'supabase' ? await supabaseHealth() : [];
+
+  if (settingsProblems.length || databaseProblems.length) {
     return (
       <html lang="en" className={`${jakarta.variable} ${serif.variable}`}>
         <body>
           <SetupRequired
-            problems={problems}
-            environment={process.env.VERCEL_ENV ?? 'unknown'}
+            stage={settingsProblems.length ? 'settings' : 'database'}
+            problems={settingsProblems.length ? settingsProblems : databaseProblems}
+            environment={process.env.VERCEL_ENV ?? 'development'}
             seenNames={Object.keys(process.env)
               .filter((n) => /SUPABASE|SESSION/i.test(n))
               .sort()}
