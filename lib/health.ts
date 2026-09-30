@@ -19,7 +19,8 @@ function host(): string {
 
 function explain(what: string, error: { message?: string; code?: string }): string {
   const msg = error.message ?? String(error);
-  if (error.code === 'PGRST205' || error.code === '42P01' || /does not exist|could not find the table|schema cache/i.test(msg)) {
+  // Only a missing *table* means schema.sql hasn't run; a missing column is reported as-is below.
+  if (error.code === 'PGRST205' || error.code === '42P01' || /relation .* does not exist|could not find the table/i.test(msg)) {
     return `${what} was not found in the Supabase project ${host()}. Run supabase/schema.sql in that project's SQL Editor.`;
   }
   if (/invalid api key|jwt|apikey|signature|unauthorized|invalid (compact )?jws/i.test(msg)) {
@@ -55,7 +56,8 @@ export async function supabaseHealth(): Promise<Health> {
     const tables = Object.values(TABLES);
     const [bucket, ...tableResults] = await Promise.all([
       db.storage.getBucket(RESUME_BUCKET),
-      ...tables.map((t) => db.from(t).select('id').limit(1)),
+      // '*' rather than a named column: not every table has an id column (profiles are keyed by user_id).
+      ...tables.map((t) => db.from(t).select('*').limit(1)),
     ]);
     for (const [i, { error }] of tableResults.entries()) {
       if (!error) continue;
